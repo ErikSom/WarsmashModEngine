@@ -11,7 +11,7 @@ import com.github.xpenatan.gdx.teavm.backends.web.config.backend.WebBackend;
 public class BuildTeaVMHtml {
 	public static void main(final String[] args) {
 		final AssetFileHandle assetsPath = new AssetFileHandle("../core/assets");
-		new TeaCompiler(new WebBackend().setStartJettyAfterBuild(true))
+		new TeaCompiler(new WebBackend().setStartJettyAfterBuild(false))
 				.addAssets(assetsPath)
 				.setOptimizationLevel(TeaVMOptimizationLevel.SIMPLE)
 				.setMainClass(HtmlLauncher.class.getName())
