@@ -20,16 +20,19 @@ import com.etheller.warsmash.util.ImageUtils.TextureDecoder;
 public final class WebTextureDecoder implements TextureDecoder {
 	@Override
 	public Texture decode(final byte[] bytes, final boolean sRGBFix) {
+		final Pixmap pm = decodeToPixmap(bytes);
+		return (pm == null) ? placeholder() : toTexture(pm);
+	}
+
+	@Override
+	public Pixmap decodeToPixmap(final byte[] bytes) {
 		if (bytes == null) {
-			return placeholder();
+			return null;
 		}
 		if (Blp1Decoder.isBlp1(bytes) && !Blp1Decoder.isJpeg(bytes)) {
-			final Pixmap pm = Blp1Decoder.decodePaletteMip0(bytes);
-			if (pm != null) {
-				return toTexture(pm);
-			}
+			return Blp1Decoder.decodePaletteMip0(bytes);
 		}
-		return placeholder();
+		return null;
 	}
 
 	@Override

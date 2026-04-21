@@ -1,5 +1,7 @@
 package com.etheller.warsmash.desktop.editor.w3m.ui.editors.terrain;
 
+import com.etheller.warsmash.DataSourceAssembly;
+
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
@@ -47,7 +49,7 @@ public class TerrainEditorPanel extends AbstractWorldEditorPanel {
 		final Element emulatorConstants = warsmashIni.get("Emulator");
 		WarsmashConstants.loadConstants(emulatorConstants, warsmashIni);
 		WarsmashConstants.LOAD_UNITS_FROM_WORLDEDIT_DATA = true;
-		this.dataSource = WarsmashGdxMapScreen.parseDataSources(warsmashIni);
+		this.dataSource = DataSourceAssembly.parseDataSources(warsmashIni);
 		final StandardObjectData standardObjectData = new StandardObjectData(this.dataSource);
 		final DataTable worldEditData = standardObjectData.getWorldEditData();
 		final WorldEditArt worldEditArt = new WorldEditArt(this.dataSource, worldEditData);

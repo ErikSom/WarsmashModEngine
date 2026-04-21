@@ -1,11 +1,10 @@
 package com.etheller.warsmash.viewer5;
 
-import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.GL30;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.etheller.warsmash.viewer5.handlers.ResourceHandler;
 
 /**
@@ -91,50 +90,24 @@ public abstract class RawOpenGLTextureResource extends Texture {
 		final GL20 gl = this.viewer.gl;
 	}
 
-	public void update(final BufferedImage image, final boolean sRGBFix) {
-		final GL20 gl = this.viewer.gl;
-
-		final int imageWidth = image.getWidth();
-		final int imageHeight = image.getHeight();
-		final int[] pixels = new int[imageWidth * imageHeight];
-		image.getRGB(0, 0, imageWidth, imageHeight, pixels, 0, imageWidth);
-
-		final ByteBuffer buffer = ByteBuffer.allocateDirect(imageWidth * imageHeight * BYTES_PER_PIXEL)
-				.order(ByteOrder.nativeOrder());
-		// 4
-		// for
-		// RGBA,
-		// 3
-		// for
-		// RGB
-
-		for (int y = 0; y < imageHeight; y++) {
-			for (int x = 0; x < imageWidth; x++) {
-				final int pixel = pixels[(y * imageWidth) + x];
-				buffer.put((byte) ((pixel >> 16) & 0xFF)); // Red component
-				buffer.put((byte) ((pixel >> 8) & 0xFF)); // Green component
-				buffer.put((byte) (pixel & 0xFF)); // Blue component
-				buffer.put((byte) ((pixel >> 24) & 0xFF)); // Alpha component.
-				// Only for RGBA
-			}
-		}
-
-		buffer.flip();
+	/** Upload from a libGDX {@link Pixmap} (RGBA8888). Platform-agnostic entry
+	 *  point — desktop callers decode their BufferedImage to Pixmap via
+	 *  AwtImageUtils; web callers get a Pixmap straight from Blp1Decoder. */
+	public void update(final Pixmap pixmap, final boolean sRGBFix) {
+		final ByteBuffer buffer = pixmap.getPixels();
+		buffer.position(0);
+		buffer.limit(buffer.capacity());
 		this.data = buffer;
 
+		final GL20 gl = this.viewer.gl;
 		gl.glBindTexture(GL20.GL_TEXTURE_2D, this.handle);
-
-//		if ((this.width == imageWidth) && (this.height == imageHeight)) {
-//			gl.glTexSubImage2D(GL20.GL_TEXTURE_2D, 0, 0, 0, imageWidth, imageHeight, GL20.GL_RGBA,
-//					GL20.GL_UNSIGNED_BYTE, buffer);
-//		}
-//		else {
-		gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, sRGBFix ? GL30.GL_SRGB8_ALPHA8 : GL30.GL_RGBA8, imageWidth, imageHeight,
+		gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0,
+				sRGBFix ? GL30.GL_SRGB8_ALPHA8 : GL30.GL_RGBA8,
+				pixmap.getWidth(), pixmap.getHeight(),
 				0, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, buffer);
 
-		this.width = imageWidth;
-		this.height = imageHeight;
-//		}
+		this.width = pixmap.getWidth();
+		this.height = pixmap.getHeight();
 	}
 
 	/**

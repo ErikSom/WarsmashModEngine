@@ -98,7 +98,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 			final String renderer = Gdx.gl.glGetString(GL20.GL_RENDERER);
 			System.err.println("Renderer: " + renderer);
 
-			this.codebase = WarsmashGdxMapScreen.parseDataSources(this.warsmashIni);
+			this.codebase = DataSourceAssembly.parseDataSources(this.warsmashIni);
 			this.viewer = new MdxViewer(this.codebase, this.game);
 
 			this.viewer.addHandler(new MdxHandler());

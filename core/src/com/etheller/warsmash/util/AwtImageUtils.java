@@ -52,6 +52,17 @@ public final class AwtImageUtils {
 		}
 
 		@Override
+		public Pixmap decodeToPixmap(final byte[] bytes) {
+			try (final ByteArrayInputStreamCompat in = new ByteArrayInputStreamCompat(bytes)) {
+				final BufferedImage img = ImageIO.read(in);
+				return (img == null) ? null : bufferedImageToPixmap(img);
+			}
+			catch (final IOException e) {
+				return null;
+			}
+		}
+
+		@Override
 		public Texture getAnyExtensionTexture(final DataSource ds, final String path) {
 			try {
 				final AnyExtensionImage imageInfo = getAnyExtensionImageFixRGB(ds, path, "texture");
@@ -63,6 +74,22 @@ public final class AwtImageUtils {
 			}
 		}
 	};
+
+	/** BufferedImage → RGBA Pixmap (pixel loop). */
+	public static Pixmap bufferedImageToPixmap(final BufferedImage image) {
+		final int w = image.getWidth();
+		final int h = image.getHeight();
+		final int[] pixels = new int[w * h];
+		image.getRGB(0, 0, w, h, pixels, 0, w);
+		final Pixmap pm = new Pixmap(w, h, Format.RGBA8888);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				final int argb = pixels[(y * w) + x];
+				pm.drawPixel(x, y, (argb << 8) | (argb >>> 24));
+			}
+		}
+		return pm;
+	}
 
 	public static AnyExtensionImage getAnyExtensionImageFixRGB(final DataSource dataSource, final String path,
 			final String errorType) throws IOException {

@@ -222,57 +222,10 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.commonEnv.main();
 	}
 
-	/**
-	 * Test-only / web-port escape hatch. If non-null, {@link #parseDataSources}
-	 * returns this source verbatim instead of assembling one from the INI's
-	 * {@code [DataSources]} block. The web build uses it to inject an
-	 * {@link com.etheller.warsmash.datasources.InMemoryDataSource} built out of
-	 * assets preloaded from OPFS.
-	 */
-	public static DataSource overrideDataSource;
-
-	public static DataSource parseDataSources(final DataTable warsmashIni) {
-		if (overrideDataSource != null) {
-			return overrideDataSource;
-		}
-		final Element dataSourcesConfig = warsmashIni.get("DataSources");
-		final List<DataSourceDescriptor> dataSourcesList = new ArrayList<>();
-		final List<String> allCascPrefixes = new ArrayList<>();
-		for (int i = 0; i < dataSourcesConfig.size(); i++) {
-			final String type = dataSourcesConfig.getField("Type" + (i < 10 ? "0" : "") + i);
-			final String path = dataSourcesConfig.getField("Path" + (i < 10 ? "0" : "") + i);
-			switch (type) {
-			case "Folder": {
-				dataSourcesList.add(new FolderDataSourceDescriptor(path));
-				break;
-			}
-			case "MPQ": {
-				dataSourcesList.add(new MpqDataSourceDescriptor(path));
-				break;
-			}
-			case "CASC": {
-				final String prefixes = dataSourcesConfig.getField("Prefixes" + (i < 10 ? "0" : "") + i);
-				final List<String> parsedPrefixes = Arrays.asList(prefixes.split(","));
-				allCascPrefixes.addAll(parsedPrefixes);
-				dataSourcesList.add(new CascDataSourceDescriptor(path, parsedPrefixes));
-				break;
-			}
-			case "":
-				continue;
-			default:
-				throw new RuntimeException("Unknown data source type: " + type);
-			}
-		}
-		final DataSource baseCompoundDataSource = new CompoundDataSourceDescriptor(dataSourcesList).createDataSource();
-
-		final List<DataSource> subdirDataSourcesList = new ArrayList<>();
-//		Collections.reverse(allCascPrefixes);
-		for (final String prefix : allCascPrefixes) {
-			subdirDataSourcesList.add(new SubdirDataSource(baseCompoundDataSource, prefix + "\\"));
-		}
-		subdirDataSourcesList.add(baseCompoundDataSource);
-		return new CompoundDataSource(subdirDataSourcesList);
-	}
+	// parseDataSources moved to DataSourceAssembly so that code paths which
+	// only need the DataSource wiring (including the TeaVM web build) don't
+	// drag WarsmashGdxMapScreen — and its transitive AWT/TGA/image dependencies
+	// — into TeaVM's reachable class graph.
 
 	private void updateUIScene() {
 		this.tempRect.x = this.uiViewport.getScreenX();

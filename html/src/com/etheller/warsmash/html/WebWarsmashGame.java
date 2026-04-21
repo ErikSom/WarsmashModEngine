@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import com.etheller.warsmash.WarsmashGdxMapScreen;
+import com.etheller.warsmash.DataSourceAssembly;
 import com.etheller.warsmash.WarsmashGdxMenuScreen;
 import com.etheller.warsmash.datasources.InMemoryDataSource;
 import com.etheller.warsmash.util.ImageUtils;
@@ -151,7 +151,7 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		}
 		try {
 			status("  setting override DataSource");
-			WarsmashGdxMapScreen.overrideDataSource = this.preloadedSource;
+			DataSourceAssembly.overrideDataSource = this.preloadedSource;
 			status("  instantiating WarsmashGdxMenuScreen …");
 			final WarsmashGdxMenuScreen screen = new WarsmashGdxMenuScreen(this.warsmashIni, this);
 			status("  calling setScreen …");

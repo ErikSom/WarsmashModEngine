@@ -1,5 +1,6 @@
 package com.etheller.warsmash.util;
 
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.etheller.warsmash.datasources.DataSource;
 
@@ -22,6 +23,10 @@ public final class ImageUtils {
 		/** Decode raw image bytes (BLP / TGA / DDS) into a libGDX Texture. */
 		Texture decode(byte[] bytes, boolean sRGBFix);
 
+		/** Decode raw image bytes into a libGDX Pixmap (for callers like
+		 *  {@code RawOpenGLTextureResource} that upload to GL themselves). */
+		Pixmap decodeToPixmap(byte[] bytes);
+
 		/** Look up an asset (with BLP → TGA → DDS fallback) and decode. */
 		Texture getAnyExtensionTexture(DataSource dataSource, String path);
 	}
@@ -38,6 +43,13 @@ public final class ImageUtils {
 			throw new IllegalStateException("ImageUtils.textureDecoder is unset — platform bootstrap missing");
 		}
 		return textureDecoder.decode(bytes, sRGBFix);
+	}
+
+	public static Pixmap decodeToPixmap(final byte[] bytes) {
+		if (textureDecoder == null) {
+			throw new IllegalStateException("ImageUtils.textureDecoder is unset — platform bootstrap missing");
+		}
+		return textureDecoder.decodeToPixmap(bytes);
 	}
 
 	private ImageUtils() {

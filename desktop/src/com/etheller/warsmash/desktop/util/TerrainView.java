@@ -1,5 +1,7 @@
 package com.etheller.warsmash.desktop.util;
 
+import com.etheller.warsmash.DataSourceAssembly;
+
 import java.io.IOException;
 
 import javax.swing.JFrame;
@@ -16,7 +18,7 @@ import com.etheller.warsmash.units.DataTable;
 public class TerrainView {
 	public static void main(final String[] args) {
 		final DataTable warsmashIni = DesktopLauncher.loadWarsmashIni();
-		final DataSource dataSources = WarsmashGdxMapScreen.parseDataSources(warsmashIni);
+		final DataSource dataSources = DataSourceAssembly.parseDataSources(warsmashIni);
 		final War3Map war3Map = new War3Map(dataSources, warsmashIni.get("Map").getField("FilePath"));
 		try {
 			final War3MapW3e environmentFile = war3Map.readEnvironment();

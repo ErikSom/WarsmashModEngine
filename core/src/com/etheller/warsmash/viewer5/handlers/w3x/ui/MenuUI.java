@@ -1,5 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
 
+import com.etheller.warsmash.DataSourceAssembly;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -1644,7 +1646,7 @@ public class MenuUI {
 		this.loadingFrame.setVisible(true);
 		this.loadingBar.setVisible(true);
 		this.loadingCustomPanel.setVisible(true);
-		final DataSource codebase = WarsmashGdxMapScreen.parseDataSources(this.warsmashIni);
+		final DataSource codebase = DataSourceAssembly.parseDataSources(this.warsmashIni);
 		final GameTurnManager turnManager;
 		turnManager = GameTurnManager.PAUSED;
 		final War3MapViewer viewer = new War3MapViewer(codebase, this.screenManager, this.currentMapConfig,

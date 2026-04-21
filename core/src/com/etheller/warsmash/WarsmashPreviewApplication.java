@@ -1,5 +1,7 @@
 package com.etheller.warsmash;
 
+import com.etheller.warsmash.DataSourceAssembly;
+
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -64,7 +66,7 @@ public class WarsmashPreviewApplication extends ApplicationAdapter implements Ca
 		final String renderer = Gdx.gl.glGetString(GL20.GL_RENDERER);
 		System.err.println("Renderer: " + renderer);
 
-		this.codebase = WarsmashGdxMapScreen.parseDataSources(this.warsmashIni);
+		this.codebase = DataSourceAssembly.parseDataSources(this.warsmashIni);
 		this.viewer = new MdxViewer(this.codebase, this, new Vector3(0.3f, 0.3f, -0.25f));
 
 		this.mdxHandler = new MdxHandler();

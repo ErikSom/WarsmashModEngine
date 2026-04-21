@@ -1,5 +1,7 @@
 package com.etheller.warsmash;
 
+import com.etheller.warsmash.DataSourceAssembly;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -100,7 +102,7 @@ public class WarsmashGdxFDFTestRenderScreen implements InputProcessor, Screen, S
 			final String renderer = Gdx.gl.glGetString(GL20.GL_RENDERER);
 			System.err.println("Renderer: " + renderer);
 
-			this.codebase = WarsmashGdxMapScreen.parseDataSources(this.warsmashIni);
+			this.codebase = DataSourceAssembly.parseDataSources(this.warsmashIni);
 			this.viewer = new MdxViewer(this.codebase, this.game, Vector3.Zero);
 
 			this.viewer.addHandler(new MdxHandler());
