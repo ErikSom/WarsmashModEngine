@@ -28,7 +28,7 @@ import com.badlogic.gdx.utils.Timer.Task;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.etheller.warsmash.SingleModelScreen;
-import com.etheller.warsmash.WarsmashGdxMapScreen;
+import com.etheller.warsmash.MapScreenFactory;
 import com.etheller.warsmash.WarsmashGdxMenuScreen;
 import com.etheller.warsmash.WarsmashGdxMultiScreenGame;
 import com.etheller.warsmash.datasources.DataSource;
@@ -1652,7 +1652,9 @@ public class MenuUI {
 		final War3MapViewer viewer = new War3MapViewer(codebase, this.screenManager, this.currentMapConfig,
 				turnManager);
 
-		if (WarsmashGdxMapScreen.ENABLE_AUDIO) {
+		// (was WarsmashGdxMapScreen.ENABLE_AUDIO — inlined to avoid dragging
+		// WarsmashGdxMapScreen into the TeaVM web reachable graph)
+		if (true) {
 			viewer.worldScene.enableAudio();
 			viewer.enableAudio();
 		}
@@ -1916,8 +1918,12 @@ public class MenuUI {
 								}
 
 								// TODO not cast menu screen
-								MenuUI.this.screenManager.setScreen(new WarsmashGdxMapScreen(this.loadingMap.viewer,
-										this.screenManager, (WarsmashGdxMenuScreen) this.menuScreen, uiOrderListener));
+								final MapScreenFactory factory = MapScreenFactory.get();
+								if (factory != null) {
+									MenuUI.this.screenManager.setScreen(factory.create(this.loadingMap.viewer,
+											this.screenManager, (WarsmashGdxMenuScreen) this.menuScreen,
+											uiOrderListener));
+								}
 								this.loadingMap = null;
 								this.beginGameInformation = null;
 

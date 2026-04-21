@@ -64,7 +64,8 @@
       "Bash(find html/build -name \"app.js\" -exec ls -la {} \\\\;)",
       "Bash(./gradlew --no-daemon :html:buildWeb --rerun-tasks --console=plain)",
       "Bash(awk '/Class java\\\\.awt\\\\.image\\\\.BufferedImage was not found/{for\\(i=NR;i>0;i--\\){print l[i%30];if\\(l[i%30] ~ /at /&&l[i%30] ~/\\\\.\\\\$rt_/==0&&l[i%30]~/com\\\\.etheller/\\)break} print;exit}{l[NR%30]=$0}' /tmp/bw3.log)",
-      "Bash(git commit -m 'core: hoist parseDataSources to DataSourceAssembly *)"
+      "Bash(git commit -m 'core: hoist parseDataSources to DataSourceAssembly *)",
+      "Bash(git commit -m 'core: MapScreenFactory indirection; inline ENABLE_AUDIO flag *)"
     ]
   }
 }

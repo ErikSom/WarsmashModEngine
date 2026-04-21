@@ -47,6 +47,9 @@ public class DesktopLauncher {
 	public static void main(final String[] arg) {
 		System.out.println("Warsmash engine is starting...");
 		com.etheller.warsmash.util.ImageUtils.textureDecoder = com.etheller.warsmash.util.AwtImageUtils.DECODER;
+		com.etheller.warsmash.MapScreenFactory.register(
+				(viewer, screenManager, menuScreen, uiOrderListener) -> new com.etheller.warsmash.WarsmashGdxMapScreen(
+						viewer, screenManager, menuScreen, uiOrderListener));
 		final LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
 		config.useGL30 = true;
 		config.gles30ContextMajorVersion = 3;
