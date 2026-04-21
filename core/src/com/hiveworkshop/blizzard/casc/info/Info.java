@@ -1,16 +1,13 @@
 package com.hiveworkshop.blizzard.casc.info;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
 
 import com.hiveworkshop.blizzard.casc.nio.MalformedCASCStructureException;
-import com.hiveworkshop.nio.ByteBufferInputStream;
 
 /**
  * Top level CASC information file containing configuration information and
@@ -26,7 +23,7 @@ public class Info {
 	/**
 	 * Character encoding used by info files.
 	 */
-	public static final Charset FILE_ENCODING = Charset.forName("UTF8");
+	public static final Charset FILE_ENCODING = StandardCharsets.UTF_8;
 
 	/**
 	 * Field separator used by CASC info files.
@@ -55,19 +52,36 @@ public class Info {
 	 * @throws IOException
 	 */
 	public Info(final ByteBuffer fileBuffer) throws IOException {
-		try (final ByteBufferInputStream fileStream = new ByteBufferInputStream(fileBuffer);
-				final Scanner lineScanner = new Scanner(new InputStreamReader(fileStream, FILE_ENCODING))) {
-			final String[] encodedFieldDescriptors = separateFields(lineScanner.nextLine());
-			for (final String encodedFieldDescriptor : encodedFieldDescriptors) {
-				fieldDescriptors.add(new FieldDescriptor(encodedFieldDescriptor));
-			}
-
-			while (lineScanner.hasNextLine()) {
-				records.add(new ArrayList<>(Arrays.asList(separateFields(lineScanner.nextLine()))));
-			}
-		} catch (final NoSuchElementException e) {
+		final String[] lines = readAllLines(fileBuffer, FILE_ENCODING);
+		if (lines.length == 0) {
 			throw new MalformedCASCStructureException("missing headers");
 		}
+		for (final String encodedFieldDescriptor : separateFields(lines[0])) {
+			fieldDescriptors.add(new FieldDescriptor(encodedFieldDescriptor));
+		}
+		for (int i = 1; i < lines.length; i++) {
+			records.add(new ArrayList<>(Arrays.asList(separateFields(lines[i]))));
+		}
+	}
+
+	/**
+	 * Reads a ByteBuffer as text and splits on {@code \r?\n}. Sidesteps
+	 * {@code InputStreamReader}, which TeaVM's classlib can refuse at runtime
+	 * on certain Charset instances.
+	 */
+	public static String[] readAllLines(final ByteBuffer buf, final Charset charset) {
+		final byte[] bytes;
+		if (buf.hasArray() && (buf.arrayOffset() == 0) && (buf.position() == 0)
+				&& (buf.limit() == buf.array().length)) {
+			bytes = buf.array();
+		}
+		else {
+			final ByteBuffer dup = buf.duplicate();
+			bytes = new byte[dup.remaining()];
+			dup.get(bytes);
+		}
+		final String text = new String(bytes, charset);
+		return text.split("\\r?\\n", -1);
 	}
 
 	/**

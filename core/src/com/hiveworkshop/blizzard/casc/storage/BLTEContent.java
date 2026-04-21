@@ -12,6 +12,10 @@ import com.hiveworkshop.lang.Hex;
  * BLTE content entry, used to decode BLTE file data that follows it.
  */
 public class BLTEContent {
+	/** Portable replacement for {@code Integer.toUnsignedLong} (absent from TeaVM classlib). */
+	private static long uint(final int v) { return v & 0xFFFFFFFFL; }
+
+
 	/**
 	 * BLTE content identifier.
 	 */
@@ -27,8 +31,8 @@ public class BLTEContent {
 	private final byte[] hash = new byte[HASH_LENGTH];
 
 	public BLTEContent(final ByteBuffer blteBuffer) {
-		compressedSize = Integer.toUnsignedLong(blteBuffer.getInt());
-		decompressedSize = Integer.toUnsignedLong(blteBuffer.getInt());
+		compressedSize = uint(blteBuffer.getInt());
+		decompressedSize = uint(blteBuffer.getInt());
 		blteBuffer.get(hash);
 	}
 
@@ -50,7 +54,7 @@ public class BLTEContent {
 
 		final long headerSize;
 		try {
-			headerSize = Integer.toUnsignedLong(contentBuffer.getInt());
+			headerSize = uint(contentBuffer.getInt());
 		} catch (final BufferUnderflowException e) {
 			throw new MalformedCASCStructureException("header preamble goes out of bounds");
 		}

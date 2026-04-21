@@ -9,6 +9,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -200,7 +201,7 @@ public final class VirtualFileSystem {
 	/**
 	 * Character encoding used internally by file paths.
 	 */
-	public static final Charset PATH_ENCODING = Charset.forName("UTF8");
+	public static final Charset PATH_ENCODING = StandardCharsets.UTF_8;
 
 	/**
 	 * Path separator used by path strings.
@@ -377,7 +378,7 @@ public final class VirtualFileSystem {
 		int vfsNumber = 0;
 		String configurationKey;
 		while (buildConfiguration
-				.containsKey(configurationKey = CONFIGURATION_KEY_PREFIX + Integer.toUnsignedString(++vfsNumber))) {
+				.containsKey(configurationKey = CONFIGURATION_KEY_PREFIX + Integer.toString(++vfsNumber))) {
 			final com.hiveworkshop.blizzard.casc.StorageReference storageReference = new com.hiveworkshop.blizzard.casc.StorageReference(
 					configurationKey, buildConfiguration);
 			tvfsStorageReferences.put(storageReference.getEncodingKey(), storageReference);

@@ -1,6 +1,7 @@
 package com.etheller.warsmash.datasources;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,6 +9,7 @@ import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collection;
 import java.util.HashSet;
@@ -139,10 +141,21 @@ public class MpqDataSource implements DataSource {
 			final Set<String> listfile = new HashSet<>();
 			ArchivedFile listfileContents;
 			listfileContents = this.archive.lookupHash2(new HashLookup("(listfile)"));
-			final ArchivedFileStream stream = new ArchivedFileStream(this.inputChannel, this.extractor,
-					listfileContents);
-			final InputStream newInputStream = Channels.newInputStream(stream);
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(newInputStream))) {
+			// Read the listfile blob into a byte buffer directly, avoiding
+			// java.nio.channels.Channels (absent from TeaVM's classlib).
+			final byte[] listfileBytes;
+			try (final ArchivedFileStream stream = new ArchivedFileStream(this.inputChannel, this.extractor,
+					listfileContents)) {
+				final long size = stream.size();
+				final ByteBuffer buf = ByteBuffer.allocate((int) size);
+				stream.read(buf);
+				listfileBytes = buf.array();
+			}
+			catch (final IOException exc) {
+				throw new RuntimeException(exc);
+			}
+			try (BufferedReader reader = new BufferedReader(
+					new InputStreamReader(new ByteArrayInputStream(listfileBytes), StandardCharsets.UTF_8))) {
 				String line;
 				while ((line = reader.readLine()) != null) {
 					listfile.add(line);

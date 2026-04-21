@@ -3,7 +3,6 @@ package com.hiveworkshop.blizzard.casc.io;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -126,165 +125,117 @@ public class WarcraftIIICASC implements AutoCloseable {
 		}
 	}
 
-	/**
-	 * Name of the CASC data folder used by Warcraft III.
-	 */
-	private static final String WC3_DATA_FOLDER_NAME = "Data";
-
-	/**
-	 * Warcraft III build information.
-	 */
+	/** Warcraft III build information. */
 	private final Info buildInfo;
 
-	/**
-	 * Detected active build information record.
-	 */
+	/** Detected active build information record. */
 	private final int activeInfoRecord;
 
-	/**
-	 * Warcraft III build configuration.
-	 */
+	/** Warcraft III build configuration. */
 	private final ConfigurationFile buildConfiguration;
 
-	/**
-	 * Warcraft III CASC data folder path.
-	 */
-	private final Path dataPath;
-
-	/**
-	 * Warcraft III local storage.
-	 */
+	/** Warcraft III local storage. */
 	private final Storage localStorage;
 
-	/**
-	 * TVFS file system to resolve file paths.
-	 */
+	/** TVFS file system to resolve file paths. */
 	private final VirtualFileSystem vfs;
 
+	/** Kept for the (installFolder,_) API to continue exposing getDataPath()-style behavior. */
+	private final CascInstallReader reader;
+
 	/**
-	 * Construct an interface to the CASC local storage used by Warcraft III. Can be
-	 * used to read data files from the local storage.
-	 * <p>
-	 * The active build record is used for local storage details.
-	 * <p>
-	 * Install folder is the Warcraft III installation folder where the
-	 * <code>.build.info</code> file is located. For example
-	 * <code>C:\Program Files (x86)\Warcraft III</code>.
-	 * <p>
-	 * Memory mapped IO can be used instead of conventional channel based IO. This
-	 * should improve IO performance considerably by avoiding excessive memory copy
-	 * operations and system calls. However it may place considerable strain on the
-	 * Java VM application virtual memory address space. As such memory mapping
-	 * should only be used with large address aware VMs.
-	 *
-	 * @param installFolder    Warcraft III installation folder.
-	 * @param useMemoryMapping If memory mapped IO should be used to read file data.
-	 * @throws IOException If an exception occurs while mounting.
+	 * Legacy constructor for desktop callers — wraps a
+	 * {@link NioCascInstallReader}.
 	 */
 	public WarcraftIIICASC(final Path installFolder, final boolean useMemoryMapping) throws IOException {
-		final Path infoFilePath = installFolder.resolve(Info.BUILD_INFO_FILE_NAME);
-		buildInfo = new Info(ByteBuffer.wrap(Files.readAllBytes(infoFilePath)));
+		this(new NioCascInstallReader(installFolder, useMemoryMapping));
+	}
 
-		final int recordCount = buildInfo.getRecordCount();
+	/**
+	 * Construct over an arbitrary {@link CascInstallReader}. The reader's
+	 * data source is handed to {@link Storage}, which closes it when this
+	 * object is closed.
+	 */
+	public WarcraftIIICASC(final CascInstallReader reader) throws IOException {
+		this.reader = reader;
+
+		this.buildInfo = new Info(reader.readBuildInfo());
+
+		final int recordCount = this.buildInfo.getRecordCount();
 		if (recordCount < 1) {
 			throw new MalformedCASCStructureException("build info contains no records");
 		}
 
-		// resolve the active record
-		final int activeFiledIndex = buildInfo.getFieldIndex("Active");
-		if (activeFiledIndex == -1) {
+		final int activeFieldIndex = this.buildInfo.getFieldIndex("Active");
+		if (activeFieldIndex == -1) {
 			throw new MalformedCASCStructureException("build info contains no active field");
 		}
 		int recordIndex = 0;
-		for (; recordIndex < recordCount; recordIndex += 1) {
-			if (Integer.parseInt(buildInfo.getField(recordIndex, activeFiledIndex)) == 1) {
+		for (; recordIndex < recordCount; recordIndex++) {
+			if (Integer.parseInt(this.buildInfo.getField(recordIndex, activeFieldIndex)) == 1) {
 				break;
 			}
 		}
 		if (recordIndex == recordCount) {
 			throw new MalformedCASCStructureException("build info contains no active record");
 		}
-		activeInfoRecord = recordIndex;
+		this.activeInfoRecord = recordIndex;
 
-		// resolve build configuration file
-		final int buildKeyFieldIndex = buildInfo.getFieldIndex("Build Key");
+		final int buildKeyFieldIndex = this.buildInfo.getFieldIndex("Build Key");
 		if (buildKeyFieldIndex == -1) {
 			throw new MalformedCASCStructureException("build info contains no build key field");
 		}
-		final String buildKey = buildInfo.getField(activeInfoRecord, buildKeyFieldIndex);
+		final String buildKey = this.buildInfo.getField(this.activeInfoRecord, buildKeyFieldIndex);
 
-		// resolve data folder
-		dataPath = installFolder.resolve(WC3_DATA_FOLDER_NAME);
-		if (!Files.isDirectory(dataPath)) {
-			throw new MalformedCASCStructureException("data folder is missing");
-		}
+		this.buildConfiguration = new ConfigurationFile(reader.readConfigFile(buildKey));
 
-		// resolve build configuration file
-		buildConfiguration = ConfigurationFile.lookupConfigurationFile(dataPath, buildKey);
+		this.localStorage = new Storage(reader.getDataFileSource(), false);
 
-		// mounting local storage
-		localStorage = new Storage(dataPath, false, useMemoryMapping);
-
-		// mounting virtual file system
-		VirtualFileSystem vfs = null;
+		VirtualFileSystem constructed = null;
 		try {
-			vfs = new VirtualFileSystem(localStorage, buildConfiguration.getConfiguration());
-		} finally {
-			if (vfs == null) {
-				// storage must be closed to prevent resource leaks
-				localStorage.close();
+			constructed = new VirtualFileSystem(this.localStorage, this.buildConfiguration.getConfiguration());
+		}
+		finally {
+			if (constructed == null) {
+				this.localStorage.close();
 			}
 		}
-		this.vfs = vfs;
+		this.vfs = constructed;
 	}
 
 	@Override
 	public void close() throws IOException {
-		localStorage.close();
+		try {
+			this.localStorage.close();
+		}
+		finally {
+			this.reader.close();
+		}
 	}
 
 	/**
 	 * Returns the active record index of the build information. This is the index
 	 * of the record that is mounted.
-	 *
-	 * @return Active record index of build information.
 	 */
 	public int getActiveRecordIndex() {
-		return activeInfoRecord;
+		return this.activeInfoRecord;
 	}
 
 	/**
 	 * Returns the active branch name which is currently mounted.
-	 * <p>
-	 * This might reflect the locale that has been cached to local storage.
-	 *
-	 * @return Branch name.
-	 * @throws IOException If no branch information is available.
 	 */
 	public String getBranch() throws IOException {
-		// resolve branch
-		final int branchFieldIndex = buildInfo.getFieldIndex("Branch");
+		final int branchFieldIndex = this.buildInfo.getFieldIndex("Branch");
 		if (branchFieldIndex == -1) {
 			throw new MalformedCASCStructureException("build info contains no branch field");
 		}
-		return buildInfo.getField(activeInfoRecord, branchFieldIndex);
+		return this.buildInfo.getField(this.activeInfoRecord, branchFieldIndex);
 	}
 
-	/**
-	 * Returns the build information of the archive.
-	 *
-	 * @return Build information.
-	 */
 	public Info getBuildInfo() {
-		return buildInfo;
+		return this.buildInfo;
 	}
 
-	/**
-	 * Get the root file system of Warcraft III. From this all locally stored data
-	 * files can be accessed.
-	 *
-	 * @return Root file system containing all files.
-	 */
 	public FileSystem getRootFileSystem() {
 		return new FileSystem();
 	}

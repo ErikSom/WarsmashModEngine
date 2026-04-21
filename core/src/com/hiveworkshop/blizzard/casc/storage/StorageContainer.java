@@ -42,7 +42,7 @@ public class StorageContainer {
 			containerBuffer.position(keyEnd);
 
 			key = new Key(keyArray);
-			size = Integer.toUnsignedLong(containerBuffer.getInt());
+			size = containerBuffer.getInt() & 0xFFFFFFFFL;
 			flags = containerBuffer.getShort();
 
 			checksumA = containerBuffer.getInt();
