@@ -70,6 +70,26 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		catch (final Throwable t) {
 			status("super.create ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
 		}
+
+		try {
+			final int n = WebAssetIndex.count();
+			final double bytes = WebAssetIndex.totalBytes();
+			if (n < 0) {
+				status("asset index: (none — upload skipped?)");
+			}
+			else {
+				status("OPFS assets indexed: " + n + "  (" + (long) (bytes / 1048576) + " MB)");
+				for (int i = 0; i < Math.min(5, n); i++) {
+					status("  " + WebAssetIndex.pathAt(i));
+				}
+				if (n > 5) {
+					status("  … " + (n - 5) + " more");
+				}
+			}
+		}
+		catch (final Throwable t) {
+			status("asset index ERROR: " + t.getMessage());
+		}
 	}
 
 	private void status(final String s) {

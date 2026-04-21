@@ -15,6 +15,13 @@ task buildWeb(dependsOn: classes, type: JavaExec) {
     ignoreExitValue = false
 }
 
+task copyWebOverrides(type: Copy) {
+    from "webapp-src"
+    into "build/dist/webapp"
+}
+
+buildWeb.finalizedBy copyWebOverrides
+
 eclipse.project {
     name = appName + "-html"
 }

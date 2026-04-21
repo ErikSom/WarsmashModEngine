@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Warsmash</title>
+	<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<link rel="icon" href="data:,">
+	<style>
+		:root { color-scheme: dark; }
+		body {
+			margin: 0; padding: 0; overflow: hidden;
+			background: #000; color: #eee;
+			font-family: system-ui, -apple-system, sans-serif;
+			height: 100vh;
+		}
+		#canvas-wrap {
+			display: none;
+			justify-content: center; align-items: center;
+			height: 100vh;
+		}
+		#canvas { border: none; display: block; }
+		#overlay {
+			position: fixed; inset: 0;
+			display: flex; flex-direction: column;
+			align-items: center; justify-content: center;
+			padding: 24px;
+			background: radial-gradient(ellipse at center, #1a2233 0%, #000 100%);
+			gap: 18px;
+		}
+		#overlay h1 { margin: 0; font-size: 24px; font-weight: 500; letter-spacing: 0.5px; }
+		#overlay p { margin: 0; max-width: 520px; text-align: center; color: #bbb; line-height: 1.5; }
+		#overlay code { background: #222; padding: 2px 6px; border-radius: 3px; }
+		.row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+		button, label.fakebtn {
+			background: #2a4a7a; color: white; border: none; padding: 10px 18px;
+			border-radius: 4px; cursor: pointer; font-size: 14px;
+		}
+		button.secondary, label.fakebtn.secondary { background: #444; }
+		button:hover, label.fakebtn:hover { filter: brightness(1.15); }
+		button:disabled { opacity: 0.5; cursor: not-allowed; }
+		#progress {
+			display: none; width: 520px; max-width: 90vw;
+			background: #222; border-radius: 4px; overflow: hidden; height: 10px;
+		}
+		#progress-bar { height: 100%; width: 0%; background: #4a90d9; transition: width 100ms; }
+		#status { color: #999; font-size: 13px; min-height: 18px; text-align: center; }
+		#error { color: #f66; font-size: 13px; text-align: center; max-width: 520px; }
+	</style>
+</head>
+<body oncontextmenu="return false">
+	<div id="overlay">
+		<h1>Warsmash (web)</h1>
+		<p>To boot the engine the browser needs a copy of your Warcraft III install.
+			The folder is copied once into private browser storage (OPFS) and reused on subsequent visits.</p>
+		<div class="row">
+			<label class="fakebtn" for="dir-input">Select Warcraft III folder</label>
+			<input id="dir-input" type="file" webkitdirectory multiple style="display:none">
+			<button id="resume-btn" class="secondary" style="display:none">Resume with cached assets</button>
+			<button id="reset-btn" class="secondary" style="display:none">Clear cached assets</button>
+		</div>
+		<div id="progress"><div id="progress-bar"></div></div>
+		<div id="status"></div>
+		<div id="error"></div>
+	</div>
+
+	<div id="canvas-wrap"><canvas id="canvas"></canvas></div>
+
+	<script>
+		const READY_KEY = 'w3AssetsReady';
+		const COUNT_KEY = 'w3AssetsCount';
+		const INDEX_KEY = 'w3AssetsIndex';
+		const ROOT_DIR = 'w3';
+
+		const el = (id) => document.getElementById(id);
+		const setStatus = (m) => { el('status').textContent = m; };
+		const setError = (m) => { el('error').textContent = m; };
+
+		async function getW3Root(create = false) {
+			const root = await navigator.storage.getDirectory();
+			return await root.getDirectoryHandle(ROOT_DIR, { create });
+		}
+
+		async function ensureDir(parent, parts) {
+			let dir = parent;
+			for (const p of parts) dir = await dir.getDirectoryHandle(p, { create: true });
+			return dir;
+		}
+
+		async function clearOpfs() {
+			try {
+				const root = await navigator.storage.getDirectory();
+				await root.removeEntry(ROOT_DIR, { recursive: true });
+			}
+			catch (e) { /* may not exist */ }
+			localStorage.removeItem(READY_KEY);
+			localStorage.removeItem(COUNT_KEY);
+			localStorage.removeItem(INDEX_KEY);
+		}
+
+		async function uploadFiles(files) {
+			setError('');
+			el('progress').style.display = 'block';
+			el('dir-input').disabled = true;
+			el('resume-btn').disabled = true;
+			el('reset-btn').disabled = true;
+
+			await clearOpfs();
+			const w3 = await getW3Root(true);
+
+			const list = Array.from(files);
+			let bytes = 0, totalBytes = 0;
+			for (const f of list) totalBytes += f.size;
+			let done = 0;
+			const started = performance.now();
+			const index = [];
+
+			for (const f of list) {
+				const rel = f.webkitRelativePath || f.name;
+				const parts = rel.split('/').filter(Boolean);
+				// Drop the top-level folder segment if present (e.g. "WarcraftIII/war3.mpq" -> "war3.mpq")
+				const relParts = (parts.length > 1) ? parts.slice(1) : parts;
+				const fileName = relParts[relParts.length - 1];
+				const dir = await ensureDir(w3, relParts.slice(0, -1));
+				const handle = await dir.getFileHandle(fileName, { create: true });
+				const writable = await handle.createWritable();
+				await writable.write(f);
+				await writable.close();
+				bytes += f.size; done++;
+				index.push({ p: relParts.join('/'), s: f.size });
+				const pct = totalBytes ? (bytes / totalBytes) * 100 : 100;
+				el('progress-bar').style.width = pct.toFixed(1) + '%';
+				const mb = (bytes / 1048576).toFixed(1);
+				const totalMb = (totalBytes / 1048576).toFixed(1);
+				setStatus(`${done}/${list.length}  ${mb} / ${totalMb} MB  (${f.name})`);
+			}
+			const took = ((performance.now() - started) / 1000).toFixed(1);
+			localStorage.setItem(READY_KEY, '1');
+			localStorage.setItem(COUNT_KEY, String(list.length));
+			localStorage.setItem(INDEX_KEY, JSON.stringify(index));
+			setStatus(`Copied ${list.length} files (${(totalBytes / 1048576).toFixed(1)} MB) in ${took}s.`);
+			startEngine();
+		}
+
+		function startEngine() {
+			el('overlay').style.display = 'none';
+			el('canvas-wrap').style.display = 'flex';
+			const s = document.createElement('script');
+			s.src = 'app.js';
+			s.charset = 'utf-8';
+			s.onload = () => { if (typeof main === 'function') main(); };
+			document.body.appendChild(s);
+		}
+
+		function wireUI() {
+			el('dir-input').addEventListener('change', (e) => {
+				if (e.target.files && e.target.files.length) uploadFiles(e.target.files).catch(err => setError(String(err)));
+			});
+			el('resume-btn').addEventListener('click', startEngine);
+			el('reset-btn').addEventListener('click', async () => {
+				await clearOpfs();
+				location.reload();
+			});
+		}
+
+		(async function init() {
+			wireUI();
+			if (!('storage' in navigator) || !navigator.storage.getDirectory) {
+				setError('OPFS is not supported in this browser.');
+				return;
+			}
+			if (localStorage.getItem(READY_KEY) === '1') {
+				const n = localStorage.getItem(COUNT_KEY) || '?';
+				setStatus(`Found cached assets (${n} files).`);
+				el('resume-btn').style.display = '';
+				el('reset-btn').style.display = '';
+			}
+		})();
+	</script>
+</body>
+</html>
