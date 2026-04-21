@@ -1,8 +1,14 @@
 package com.etheller.warsmash.html;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+
+import com.etheller.warsmash.WarsmashGdxMapScreen;
+import com.etheller.warsmash.WarsmashGdxMenuScreen;
+import com.etheller.warsmash.datasources.InMemoryDataSource;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
@@ -20,6 +26,11 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 	private BitmapFont overlayFont;
 	private float copyFlashSeconds;
 	private int workerMessagesShown;
+	private InMemoryDataSource preloadedSource;
+	private long preloadStartMillis;
+	private DataTable warsmashIni;
+	private boolean bootRequested;
+	private boolean bootAttempted;
 
 	@Override
 	public void create() {
@@ -42,20 +53,19 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 			status("extensions ERROR: " + t.getMessage());
 		}
 
-		DataTable ini = null;
 		try (InputStream in = Gdx.files.internal("warsmash.ini").read()) {
-			ini = new DataTable(StringBundle.EMPTY);
-			ini.readTXT(in, true);
-			status("warsmash.ini parsed, sections=" + ini.keySet().size());
+			this.warsmashIni = new DataTable(StringBundle.EMPTY);
+			this.warsmashIni.readTXT(in, true);
+			status("warsmash.ini parsed, sections=" + this.warsmashIni.keySet().size());
 		}
 		catch (final Throwable t) {
 			status("ini ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
 		}
 
-		if (ini != null) {
+		if (this.warsmashIni != null) {
 			try {
-				final Element emulator = ini.get("Emulator");
-				WarsmashConstants.loadConstants(emulator, ini);
+				final Element emulator = this.warsmashIni.get("Emulator");
+				WarsmashConstants.loadConstants(emulator, this.warsmashIni);
 				status("WarsmashConstants loaded; MAX_PLAYERS=" + WarsmashConstants.MAX_PLAYERS
 						+ ", GAME_VERSION=" + WarsmashConstants.GAME_VERSION);
 			}
@@ -79,18 +89,137 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 				status("asset index: (none — upload skipped?)");
 			}
 			else {
-				status("OPFS assets indexed: " + n + "  (" + (long) (bytes / 1048576) + " MB)");
-				for (int i = 0; i < Math.min(5, n); i++) {
-					status("  " + WebAssetIndex.pathAt(i));
-				}
-				if (n > 5) {
-					status("  … " + (n - 5) + " more");
-				}
+				status("OPFS /w3 indexed: " + n + "  (" + (long) (bytes / 1048576) + " MB)");
 			}
 		}
 		catch (final Throwable t) {
 			status("asset index ERROR: " + t.getMessage());
 		}
+
+		tryReadExtractedSample();
+		startFullPreload();
+	}
+
+	/**
+	 * Async-list everything in /extracted, then stream all non-audio bytes into
+	 * an InMemoryDataSource. Audio (.wav/.mp3/.ogg + Sound/ + Movies/) is
+	 * skipped — our web AudioExtension is a no-op anyway, and loading hundreds
+	 * of MB of sound bytes the engine will never play is wasteful.
+	 */
+	private void startFullPreload() {
+		MainOpfsBridge.listExtracted(paths -> {
+			if (paths.length == 0) {
+				status("/extracted: empty (upload/extract first)");
+				return;
+			}
+			final List<String> filtered = new ArrayList<>(paths.length);
+			for (final String p : paths) {
+				if (shouldPreload(p)) {
+					filtered.add(p);
+				}
+			}
+			status("preloading " + filtered.size() + "/" + paths.length
+					+ " files (skipping audio/movies)");
+			this.preloadStartMillis = System.currentTimeMillis();
+			ExtractedPreloader.preload(filtered,
+					(i, total, path, bytes) -> {
+						if ((i % 1000 == 0) || (i == total)) {
+							final long elapsed = System.currentTimeMillis() - this.preloadStartMillis;
+							status("  preload " + i + "/" + total + " (" + (elapsed / 1000) + "s)");
+						}
+					},
+					(source, missing) -> {
+						final long elapsed = System.currentTimeMillis() - this.preloadStartMillis;
+						this.preloadedSource = source;
+						status("preload complete: " + source.getListfile().size() + " files, "
+								+ missing + " missing, " + (elapsed / 1000) + "s total");
+						// Don't boot from inside a JS promise callback — pick it up
+						// in the libGDX render loop instead so we're on the same
+						// thread/context the rest of the engine expects.
+						this.bootRequested = true;
+					});
+		});
+	}
+
+	private void tryBootMenuScreen() {
+		status("tryBootMenuScreen: entered");
+		if (this.warsmashIni == null || this.preloadedSource == null) {
+			status("  missing ini or DataSource — aborting");
+			return;
+		}
+		try {
+			status("  setting override DataSource");
+			WarsmashGdxMapScreen.overrideDataSource = this.preloadedSource;
+			status("  instantiating WarsmashGdxMenuScreen …");
+			final WarsmashGdxMenuScreen screen = new WarsmashGdxMenuScreen(this.warsmashIni, this);
+			status("  calling setScreen …");
+			setScreen(screen);
+			status("  setScreen ok — show() fires on next frame");
+		}
+		catch (final Throwable t) {
+			status("  tryBootMenuScreen ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+			t.printStackTrace();
+		}
+	}
+
+	private static boolean shouldPreload(final String path) {
+		final String lower = path.toLowerCase(Locale.ROOT);
+		if (lower.startsWith("sound/") || lower.startsWith("movies/")) {
+			return false;
+		}
+		return !(lower.endsWith(".wav") || lower.endsWith(".mp3") || lower.endsWith(".ogg"));
+	}
+
+
+	/**
+	 * Smoke test: async-read a single extracted file and surface size + first
+	 * line on the overlay. We walk a small list of candidates in order; the
+	 * first one that exists "wins". Calls chain via callback so we never sit
+	 * on an @Async suspension point from a rAF context.
+	 */
+	private void tryReadExtractedSample() {
+		final String[] candidates = {
+				"Units/CampaignUnitStrings.txt",
+				"Units/UnitData.slk",
+				"UI/FrameDef/Global.fdf",
+				".w3-ready",
+		};
+		tryCandidate(candidates, 0);
+	}
+
+	private void tryCandidate(final String[] candidates, final int idx) {
+		if (idx >= candidates.length) {
+			status("no sample extracted file found (did extraction run?)");
+			return;
+		}
+		final String path = candidates[idx];
+		MainOpfsBridge.readExtracted(path, data -> {
+			if (data == null) {
+				tryCandidate(candidates, idx + 1);
+				return;
+			}
+			status("read /extracted/" + path + ": " + data.length + " bytes");
+			final String preview = firstLine(data);
+			if (!preview.isEmpty()) {
+				status("  first line: " + truncate(preview, 80));
+			}
+		});
+	}
+
+	private static String firstLine(final byte[] data) {
+		final int max = Math.min(data.length, 4096);
+		int end = max;
+		for (int i = 0; i < max; i++) {
+			if (data[i] == '\n' || data[i] == '\r') {
+				end = i;
+				break;
+			}
+		}
+		return new String(data, 0, end, StandardCharsets.UTF_8);
+	}
+
+	private static String truncate(final String s, final int max) {
+		return (s.length() <= max) ? s : s.substring(0, max) + "…";
 	}
 
 	private void status(final String s) {
@@ -120,10 +249,24 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		}
 	}
 
+	private boolean screenRenderCrashed = false;
+
 	@Override
 	public void render() {
 		drainWorkerLog();
-		super.render();
+		if (this.bootRequested && !this.bootAttempted) {
+			this.bootAttempted = true;
+			tryBootMenuScreen();
+		}
+		if (!this.screenRenderCrashed) {
+			try {
+				super.render();
+			}
+			catch (final Throwable t) {
+				this.screenRenderCrashed = true;
+				status("screen.render ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+			}
+		}
 		this.overlayBatch.begin();
 		float y = Gdx.graphics.getHeight() - 20;
 		for (final String line : this.statusLines) {

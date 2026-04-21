@@ -47,6 +47,17 @@ public final class WorkerMain {
 		try {
 			if (OpfsBridge.readExtracted(READY_MARKER) != null) {
 				postMessage("worker: extraction already complete — /extracted is ready");
+				// Stale /w3 from an earlier upload wastes storage once extraction
+				// has landed. Best-effort drop; ignore errors.
+				if (OpfsBridge.findMpqFiles().length > 0) {
+					try {
+						OpfsBridge.dropUpload();
+						postMessage("worker: dropped leftover /w3 upload tree");
+					}
+					catch (final Throwable t) {
+						postMessage("worker: dropUpload error: " + t.getMessage());
+					}
+				}
 				return;
 			}
 		}
@@ -84,6 +95,14 @@ public final class WorkerMain {
 		}
 		catch (final Throwable t) {
 			postMessage("worker: mark-ready error: " + t.getMessage());
+		}
+
+		try {
+			OpfsBridge.dropUpload();
+			postMessage("worker: dropped /w3 upload tree to reclaim storage");
+		}
+		catch (final Throwable t) {
+			postMessage("worker: dropUpload error: " + t.getMessage());
 		}
 	}
 

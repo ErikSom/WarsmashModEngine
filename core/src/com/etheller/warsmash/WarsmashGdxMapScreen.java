@@ -222,7 +222,19 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.commonEnv.main();
 	}
 
+	/**
+	 * Test-only / web-port escape hatch. If non-null, {@link #parseDataSources}
+	 * returns this source verbatim instead of assembling one from the INI's
+	 * {@code [DataSources]} block. The web build uses it to inject an
+	 * {@link com.etheller.warsmash.datasources.InMemoryDataSource} built out of
+	 * assets preloaded from OPFS.
+	 */
+	public static DataSource overrideDataSource;
+
 	public static DataSource parseDataSources(final DataTable warsmashIni) {
+		if (overrideDataSource != null) {
+			return overrideDataSource;
+		}
 		final Element dataSourcesConfig = warsmashIni.get("DataSources");
 		final List<DataSourceDescriptor> dataSourcesList = new ArrayList<>();
 		final List<String> allCascPrefixes = new ArrayList<>();

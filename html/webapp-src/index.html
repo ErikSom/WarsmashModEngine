@@ -87,11 +87,11 @@
 		}
 
 		async function clearOpfs() {
-			try {
-				const root = await navigator.storage.getDirectory();
-				await root.removeEntry(ROOT_DIR, { recursive: true });
+			const root = await navigator.storage.getDirectory();
+			for (const name of ['w3', 'extracted']) {
+				try { await root.removeEntry(name, { recursive: true }); }
+				catch (e) { /* may not exist */ }
 			}
-			catch (e) { /* may not exist */ }
 			localStorage.removeItem(READY_KEY);
 			localStorage.removeItem(COUNT_KEY);
 			localStorage.removeItem(INDEX_KEY);
@@ -151,6 +151,48 @@
 			s.onload = () => { if (typeof main === 'function') main(); };
 			document.body.appendChild(s);
 		}
+
+		// Async: recursively list OPFS /extracted. Returns newline-joined
+		// forward-slash paths, or "" if /extracted doesn't exist.
+		window.w3MainListExtractedAsync = async function() {
+			const storage = await navigator.storage.getDirectory();
+			let root;
+			try { root = await storage.getDirectoryHandle('extracted'); }
+			catch (e) { return ''; }
+			const out = [];
+			async function walk(dir, prefix) {
+				for await (const [name, handle] of dir.entries()) {
+					const p = prefix + name;
+					if (handle.kind === 'directory') {
+						await walk(handle, p + '/');
+					}
+					else {
+						out.push(p);
+					}
+				}
+			}
+			await walk(root, '');
+			return out.join('\n');
+		};
+
+		// Async: read a file under OPFS /extracted as Int8Array, null on miss.
+		window.w3MainReadExtractedAsync = async function(relPath) {
+			try {
+				const storage = await navigator.storage.getDirectory();
+				let dir = await storage.getDirectoryHandle('extracted');
+				const parts = String(relPath).split('/').filter(Boolean);
+				for (let i = 0; i < parts.length - 1; i++) {
+					dir = await dir.getDirectoryHandle(parts[i]);
+				}
+				const fh = await dir.getFileHandle(parts[parts.length - 1]);
+				const file = await fh.getFile();
+				const ab = await file.arrayBuffer();
+				return new Int8Array(ab);
+			}
+			catch (e) {
+				return null;
+			}
+		};
 
 		function spawnExtractionWorker() {
 			try {

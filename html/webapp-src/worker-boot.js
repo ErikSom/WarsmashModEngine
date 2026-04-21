@@ -28,7 +28,15 @@ async function walkDir(dir, prefix) {
 
 async function initOpfs() {
 	const storage = await navigator.storage.getDirectory();
-	self._w3Root = await storage.getDirectoryHandle('w3');
+	try {
+		self._w3Root = await storage.getDirectoryHandle('w3');
+	}
+	catch (e) {
+		// /w3 was already dropped after extraction — that's fine.
+		self._w3Root = null;
+		self.postMessage('opfs: no /w3 (upload already consumed)');
+		return;
+	}
 	await walkDir(self._w3Root, '');
 	self.postMessage('opfs: indexed ' + self._w3Files.size + ' files');
 }
@@ -162,6 +170,23 @@ self.w3ClearExtracted = async function() {
 	}
 	catch (e) { /* may not exist */ }
 	self._w3ExtractedRoot = null;
+	return true;
+};
+
+// Remove the entire /w3 upload tree (and pre-opened sync handles).
+// Safe to call after extraction has completed + .w3-ready has been written.
+self.w3DropUploadAsync = async function() {
+	for (const [path, h] of self._w3MpqHandles.entries()) {
+		try { h.close(); } catch (e) {}
+		self._w3MpqHandles.delete(path);
+	}
+	try {
+		const storage = await navigator.storage.getDirectory();
+		await storage.removeEntry('w3', { recursive: true });
+	}
+	catch (e) { /* may not exist */ }
+	self._w3Files.clear();
+	self._w3Root = null;
 	return true;
 };
 

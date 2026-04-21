@@ -149,6 +149,20 @@ public final class OpfsBridge {
 	 * natives with no other parameters can trigger runtime errors.
 	 */
 	@Async
+	public static native void dropUpload();
+
+	private static void dropUpload(final AsyncCallback<Void> cb) {
+		dropUploadImpl("_", () -> cb.complete(null), err -> cb.error(new RuntimeException(err)));
+	}
+
+	// Takes a dummy param because zero-arg @Async natives have been observed to
+	// trigger TeaVM runtime "Cannot read properties of undefined" errors.
+	@JSBody(params = { "_ignored", "ok", "err" },
+			script = "self.w3DropUploadAsync().then(ok)"
+					+ ".catch(function(e) { err(e && e.message ? e.message : String(e)); });")
+	private static native void dropUploadImpl(String ignored, VoidCallback ok, StringCallback err);
+
+	@Async
 	public static native byte[] readExtracted(String relPath);
 
 	private static void readExtracted(final String relPath, final AsyncCallback<byte[]> cb) {
