@@ -19,6 +19,7 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 	private SpriteBatch overlayBatch;
 	private BitmapFont overlayFont;
 	private float copyFlashSeconds;
+	private int workerMessagesShown;
 
 	@Override
 	public void create() {
@@ -111,8 +112,17 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		}
 	}
 
+	private void drainWorkerLog() {
+		final int total = WebAssetIndex.workerLogLength();
+		while (this.workerMessagesShown < total) {
+			this.statusLines.add("[w] " + WebAssetIndex.workerLogAt(this.workerMessagesShown));
+			this.workerMessagesShown++;
+		}
+	}
+
 	@Override
 	public void render() {
+		drainWorkerLog();
 		super.render();
 		this.overlayBatch.begin();
 		float y = Gdx.graphics.getHeight() - 20;

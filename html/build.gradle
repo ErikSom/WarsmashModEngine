@@ -15,12 +15,20 @@ task buildWeb(dependsOn: classes, type: JavaExec) {
     ignoreExitValue = false
 }
 
+task buildWorker(dependsOn: classes, type: JavaExec) {
+    mainClass = "com.etheller.warsmash.html.worker.BuildWorkerTeaVM"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.projectDir
+    ignoreExitValue = false
+}
+
 task copyWebOverrides(type: Copy) {
     from "webapp-src"
     into "build/dist/webapp"
 }
 
 buildWeb.finalizedBy copyWebOverrides
+buildWeb.finalizedBy buildWorker
 
 eclipse.project {
     name = appName + "-html"

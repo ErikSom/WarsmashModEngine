@@ -144,11 +144,31 @@
 		function startEngine() {
 			el('overlay').style.display = 'none';
 			el('canvas-wrap').style.display = 'flex';
+			spawnExtractionWorker();
 			const s = document.createElement('script');
 			s.src = 'app.js';
 			s.charset = 'utf-8';
 			s.onload = () => { if (typeof main === 'function') main(); };
 			document.body.appendChild(s);
+		}
+
+		function spawnExtractionWorker() {
+			try {
+				const w = new Worker('worker-boot.js');
+				w.addEventListener('message', (e) => {
+					console.log('[worker]', e.data);
+					window.__workerLog = (window.__workerLog || []);
+					window.__workerLog.push(String(e.data));
+				});
+				w.addEventListener('error', (e) => {
+					console.error('[worker error]', e.message, e);
+					window.__workerLog = (window.__workerLog || []);
+					window.__workerLog.push('ERROR: ' + e.message);
+				});
+			}
+			catch (err) {
+				console.error('worker spawn failed', err);
+			}
 		}
 
 		function wireUI() {

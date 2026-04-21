@@ -31,4 +31,11 @@ public final class WebAssetIndex {
 			+ "  return (idx >= 0 && idx < a.length) ? a[idx].p : '';"
 			+ "} catch (e) { return ''; }")
 	public static native String pathAt(int idx);
+
+	@JSBody(script = "return (window.__workerLog || []).length;")
+	public static native int workerLogLength();
+
+	@JSBody(params = { "idx" }, script = "var a = window.__workerLog || [];"
+			+ " return (idx >= 0 && idx < a.length) ? a[idx] : '';")
+	public static native String workerLogAt(int idx);
 }
