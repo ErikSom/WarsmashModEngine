@@ -9,6 +9,7 @@ import java.util.Locale;
 import com.etheller.warsmash.WarsmashGdxMapScreen;
 import com.etheller.warsmash.WarsmashGdxMenuScreen;
 import com.etheller.warsmash.datasources.InMemoryDataSource;
+import com.etheller.warsmash.util.ImageUtils;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputAdapter;
@@ -45,6 +46,7 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		});
 
 		status("Warsmash web boot (click to copy log)");
+		ImageUtils.textureDecoder = new WebTextureDecoder();
 		try {
 			WebExtensions.install();
 			status("extensions installed");

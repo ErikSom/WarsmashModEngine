@@ -46,6 +46,7 @@ import com.etheller.warsmash.viewer5.gl.WireframeExtension;
 public class DesktopLauncher {
 	public static void main(final String[] arg) {
 		System.out.println("Warsmash engine is starting...");
+		com.etheller.warsmash.util.ImageUtils.textureDecoder = com.etheller.warsmash.util.AwtImageUtils.DECODER;
 		final LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
 		config.useGL30 = true;
 		config.gles30ContextMajorVersion = 3;

@@ -7,8 +7,8 @@ import java.nio.Buffer;
 import com.badlogic.gdx.graphics.GL30;
 import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.units.Element;
-import com.etheller.warsmash.util.ImageUtils;
-import com.etheller.warsmash.util.ImageUtils.AnyExtensionImage;
+import com.etheller.warsmash.util.AwtImageUtils;
+import com.etheller.warsmash.util.AwtImageUtils.AnyExtensionImage;
 
 public class GroundTexture {
 	public int id;
@@ -28,7 +28,7 @@ public class GroundTexture {
 			this.buildable = true;
 		}
 		if (dataSource.has(path)) {
-			final AnyExtensionImage imageInfo = ImageUtils.getAnyExtensionImageFixRGB(dataSource, path,
+			final AnyExtensionImage imageInfo = AwtImageUtils.getAnyExtensionImageFixRGB(dataSource, path,
 					"ground texture: " + this.tileId);
 			loadImage(path, gl, imageInfo.getImageData(), imageInfo.isNeedsSRGBFix());
 		}
@@ -42,7 +42,7 @@ public class GroundTexture {
 		if (image == null) {
 			throw new IllegalStateException(this.tileId + ": Missing ground texture: " + path);
 		}
-		final Buffer buffer = ImageUtils.getTextureBuffer(sRGBFix ? ImageUtils.forceBufferedImagesRGB(image) : image);
+		final Buffer buffer = AwtImageUtils.getTextureBuffer(sRGBFix ? AwtImageUtils.forceBufferedImagesRGB(image) : image);
 		final int width = image.getWidth();
 		final int height = image.getHeight();
 

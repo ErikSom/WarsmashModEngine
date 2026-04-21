@@ -64,6 +64,7 @@ import com.etheller.warsmash.parsers.fdf.frames.UIFrame;
 import com.etheller.warsmash.parsers.jass.Jass2.RootFrameListener;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
+import com.etheller.warsmash.util.AwtImageUtils;
 import com.etheller.warsmash.util.FastNumberFormat;
 import com.etheller.warsmash.util.ImageUtils;
 import com.etheller.warsmash.util.RenderMathUtils;
@@ -492,7 +493,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		Texture minimapTexture = null;
 		if (war3MapViewer.dataSource.has("war3mapMap.tga")) {
 			try {
-				minimapTexture = ImageUtils.getTextureNoColorCorrection(TgaFile.readTGA("war3mapMap.tga",
+				minimapTexture = AwtImageUtils.getTextureNoColorCorrection(TgaFile.readTGA("war3mapMap.tga",
 						war3MapViewer.dataSource.getResourceAsStream("war3mapMap.tga")));
 			}
 			catch (final IOException e) {

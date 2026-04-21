@@ -34,8 +34,8 @@ import com.etheller.warsmash.parsers.w3x.w3i.War3MapW3i;
 import com.etheller.warsmash.parsers.w3x.wpm.War3MapWpm;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
-import com.etheller.warsmash.util.ImageUtils;
-import com.etheller.warsmash.util.ImageUtils.AnyExtensionImage;
+import com.etheller.warsmash.util.AwtImageUtils;
+import com.etheller.warsmash.util.AwtImageUtils.AnyExtensionImage;
 import com.etheller.warsmash.util.RenderMathUtils;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WorldEditStrings;
@@ -270,11 +270,11 @@ public class Terrain {
 			}
 			final String texDir = cliffInfo.getField("texDir");
 			final String texFile = cliffInfo.getField("texFile");
-			final AnyExtensionImage imageInfo = ImageUtils.getAnyExtensionImageFixRGB(dataSource,
+			final AnyExtensionImage imageInfo = AwtImageUtils.getAnyExtensionImageFixRGB(dataSource,
 					texDir + "\\" + texFile + texturesExt, "cliff texture");
 			final BufferedImage image = imageInfo.getRGBCorrectImageData();
 			this.cliffTextures
-					.add(new UnloadedTexture(image.getWidth(), image.getHeight(), ImageUtils.getTextureBuffer(image),
+					.add(new UnloadedTexture(image.getWidth(), image.getHeight(), AwtImageUtils.getTextureBuffer(image),
 							cliffInfo.getField("cliffModelDir"), cliffInfo.getField("rampModelDir")));
 			this.cliffTexturesSize = Math.max(this.cliffTexturesSize,
 					this.cliffTextures.get(this.cliffTextures.size() - 1).width);
@@ -382,7 +382,7 @@ public class Terrain {
 			boolean anyWaterTextureNeedsSRGB = false;
 			int waterImageDimension = 128;
 			for (int i = 0; i < this.waterTextureCount; i++) {
-				final AnyExtensionImage imageInfo = ImageUtils.getAnyExtensionImageFixRGB(dataSource,
+				final AnyExtensionImage imageInfo = AwtImageUtils.getAnyExtensionImageFixRGB(dataSource,
 						fileName + (i < 10 ? "0" : "") + Integer.toString(i) + texturesExt, "water texture");
 				final BufferedImage image = imageInfo.getImageData();
 				if ((image.getWidth() != 128) || (image.getHeight() != 128)) {
@@ -403,7 +403,7 @@ public class Terrain {
 			for (int i = 0; i < waterTextures.size(); i++) {
 				final BufferedImage image = waterTextures.get(i);
 				gl.glTexSubImage3D(GL30.GL_TEXTURE_2D_ARRAY, 0, 0, 0, i, image.getWidth(), image.getHeight(), 1,
-						GL30.GL_RGBA, GL30.GL_UNSIGNED_BYTE, ImageUtils.getTextureBuffer(image));
+						GL30.GL_RGBA, GL30.GL_UNSIGNED_BYTE, AwtImageUtils.getTextureBuffer(image));
 			}
 		}
 
