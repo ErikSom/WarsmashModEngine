@@ -1,0 +1,20 @@
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+sourceCompatibility = 1.17
+
+sourceSets.main.java.srcDirs = [ "src/" ]
+
+ext.mainClassName = "com.etheller.warsmash.html.BuildTeaVMHtml"
+ext.assetsDir = new File("../core/assets")
+
+task buildWeb(dependsOn: classes, type: JavaExec) {
+    mainClass = project.ext.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    standardInput = System.in
+    workingDir = project.projectDir
+    ignoreExitValue = false
+}
+
+eclipse.project {
+    name = appName + "-html"
+}

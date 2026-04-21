@@ -19,7 +19,7 @@ allprojects {
     version = '1.0'
     ext {
         appName = "warsmash"
-        gdxVersion = '1.12.1'
+        gdxVersion = '1.14.0'
         antlrVersion = '4.7'
         xstreamVersion = '1.4.19'
     }
@@ -103,6 +103,19 @@ project(":jassparser") {
     dependencies {
         implementation project(":shared")
         antlr "org.antlr:antlr4:$antlrVersion" // use antlr version 4
+    }
+}
+
+project(":html") {
+    apply plugin: "java-library"
+
+    ext {
+        teavmBackendVersion = '1.5.4'
+    }
+
+    dependencies {
+        implementation project(":core")
+        implementation "com.github.xpenatan.gdx-teavm:backend-web:$teavmBackendVersion"
     }
 }
 
