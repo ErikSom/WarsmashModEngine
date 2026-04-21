@@ -9,6 +9,6 @@ public class HtmlLauncher {
 		config.width = 0;
 		config.height = 0;
 		config.useGL30 = true;
-		new WebApplication(new WarsmashHtmlApp(), config);
+		new WebApplication(new WebWarsmashGame(), config);
 	}
 }
