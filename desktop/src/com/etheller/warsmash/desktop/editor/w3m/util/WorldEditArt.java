@@ -7,7 +7,7 @@ import javax.swing.ImageIcon;
 
 import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.units.DataTable;
-import com.etheller.warsmash.util.ImageUtils;
+import com.etheller.warsmash.util.AwtImageUtils;
 
 public class WorldEditArt {
 	public static final String UNTITLED_DOODAD_ICON_PATH = "ReplaceableTextures\\WorldEditUI\\DoodadPlaceholder.blp";
@@ -27,13 +27,13 @@ public class WorldEditArt {
 		}
 		BufferedImage gameTex;
 		try {
-			gameTex = ImageUtils
+			gameTex = AwtImageUtils
 					.getAnyExtensionImageFixRGB(gameDataSource, iconTexturePath, "AbstractWorldEditorPanel.getIcon")
 					.getRGBCorrectImageData();
 		}
 		catch (final IOException e) {
 			try {
-				gameTex = ImageUtils.getAnyExtensionImageFixRGB(gameDataSource, UNTITLED_DOODAD_ICON_PATH,
+				gameTex = AwtImageUtils.getAnyExtensionImageFixRGB(gameDataSource, UNTITLED_DOODAD_ICON_PATH,
 						"AbstractWorldEditorPanel.getIcon").getRGBCorrectImageData();
 			}
 			catch (final IOException exc2) {

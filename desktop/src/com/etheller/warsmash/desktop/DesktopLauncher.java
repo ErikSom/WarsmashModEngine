@@ -48,6 +48,19 @@ public class DesktopLauncher {
 	public static void main(final String[] arg) {
 		System.out.println("Warsmash engine is starting...");
 		com.etheller.warsmash.util.ImageUtils.textureDecoder = com.etheller.warsmash.util.AwtImageUtils.DECODER;
+		com.etheller.warsmash.util.Platform.urlOpener = url -> {
+			try {
+				if (java.awt.Desktop.isDesktopSupported()
+						&& java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+					java.awt.Desktop.getDesktop().browse(new java.net.URI(url));
+					return true;
+				}
+			}
+			catch (final Exception e) {
+				e.printStackTrace();
+			}
+			return false;
+		};
 		com.etheller.warsmash.MapScreenFactory.register(
 				(viewer, screenManager, menuScreen, uiOrderListener) -> new com.etheller.warsmash.WarsmashGdxMapScreen(
 						viewer, screenManager, menuScreen, uiOrderListener));

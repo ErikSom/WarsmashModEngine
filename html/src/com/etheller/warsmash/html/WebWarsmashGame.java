@@ -25,6 +25,7 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		status("Warsmash web boot");
 
 		ImageUtils.textureDecoder = new WebTextureDecoder();
+		com.etheller.warsmash.util.Platform.urlOpener = WebPlatform::openUrl;
 
 		// WebGL2 is strict where desktop GL was lax; log GL errors instead of
 		// hard-throwing so rendering progresses past the first WebGL-specific

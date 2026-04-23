@@ -18,6 +18,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.etheller.warsmash.WarsmashGdxGame;
 import com.etheller.warsmash.datasources.InMemoryDataSource;
@@ -36,13 +37,22 @@ import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer.MapLoader;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.CameraPreset;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.CameraRates;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.GameCameraManager;
+import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.RenderUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.RenderWidget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityActivationReceiver;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.PointAbilityTargetCheckReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.CBasePlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderExecutor;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListener;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRace;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRacePreference;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState;
@@ -107,10 +117,20 @@ final class WebMapViewScreen implements Screen, InputProcessor {
 	private DataTable worldEditData;
 	private MapLoader mapLoader;
 	private GameCameraManager cameraManager;
+	private CPlayerUnitOrderListener orderListener;
+	private final List<RenderWidget> selectedUnits = new ArrayList<>();
+	private final Vector3 clickLocationTemp = new Vector3();
+	private final AbilityPointTarget clickLocationTemp2 = new AbilityPointTarget(0f, 0f);
 	private boolean initialized;
 	private boolean ready;
 	private boolean failed;
 	private boolean draggingCamera;
+	// Click-vs-drag discrimination: remember the touchDown position/button so
+	// touchUp can decide whether the user clicked or dragged.
+	private int touchDownScreenX;
+	private int touchDownScreenY;
+	private int touchDownButton = -1;
+	private static final int CLICK_DRAG_THRESHOLD_PX = 4;
 	private String failureMessage = "";
 	private String loadingMessage = "";
 
@@ -330,6 +350,10 @@ final class WebMapViewScreen implements Screen, InputProcessor {
 		spawnMeleeStartUnitsIfNeeded();
 		this.viewer.terrain.reloadFogOfWarDataToGPU(this.viewer.simulation);
 		setupCamera();
+		// Local, non-networked order listener: issued orders get applied directly
+		// to the sim. This is the entry point for click-to-move / right-click
+		// orders from the web harness.
+		this.orderListener = new CPlayerUnitOrderExecutor(this.viewer.simulation, LOCAL_PLAYER_INDEX);
 		this.ready = true;
 		this.loadingMessage = "first rendered frame ready";
 		this.game.status("simulation booted with local turn manager");
@@ -636,7 +660,13 @@ final class WebMapViewScreen implements Screen, InputProcessor {
 		if (this.cameraManager == null) {
 			return false;
 		}
-		this.draggingCamera = true;
+		// Don't commit to "this is a drag" yet — wait to see if the pointer moves
+		// beyond CLICK_DRAG_THRESHOLD_PX before touchUp. If it doesn't, treat the
+		// gesture as a click in touchUp.
+		this.touchDownButton = button;
+		this.touchDownScreenX = screenX;
+		this.touchDownScreenY = screenY;
+		this.draggingCamera = false;
 		this.dragStartScreen.set(screenX, screenY);
 		this.dragStartTarget.set(this.cameraManager.target.x, this.cameraManager.target.y);
 		return true;
@@ -644,19 +674,124 @@ final class WebMapViewScreen implements Screen, InputProcessor {
 
 	@Override
 	public boolean touchUp(final int screenX, final int screenY, final int pointer, final int button) {
+		final boolean wasDrag = this.draggingCamera;
+		final int heldButton = this.touchDownButton;
 		this.draggingCamera = false;
+		this.touchDownButton = -1;
+		if (!wasDrag && this.ready && (heldButton == button)) {
+			if (button == Input.Buttons.LEFT) {
+				handleLeftClick(screenX, screenY);
+				return true;
+			}
+			if (button == Input.Buttons.RIGHT) {
+				handleRightClick(screenX, screenY);
+				return true;
+			}
+		}
 		return false;
 	}
 
 	@Override
 	public boolean touchDragged(final int screenX, final int screenY, final int pointer) {
-		if (!this.draggingCamera || (this.cameraManager == null)) {
+		if ((this.touchDownButton == -1) || (this.cameraManager == null)) {
 			return false;
+		}
+		if (!this.draggingCamera) {
+			final int dx = screenX - this.touchDownScreenX;
+			final int dy = screenY - this.touchDownScreenY;
+			if (((dx * dx) + (dy * dy)) < (CLICK_DRAG_THRESHOLD_PX * CLICK_DRAG_THRESHOLD_PX)) {
+				// Still within the click-slop region — don't start panning yet.
+				return false;
+			}
+			this.draggingCamera = true;
 		}
 		final float dragScale = Math.max(0.5f, this.cameraManager.distance / 900f);
 		this.cameraManager.target.x = this.dragStartTarget.x - ((screenX - this.dragStartScreen.x) * dragScale);
 		this.cameraManager.target.y = this.dragStartTarget.y + ((screenY - this.dragStartScreen.y) * dragScale);
 		return true;
+	}
+
+	// ------------------------------------------------------------------
+	// Click handlers
+	// ------------------------------------------------------------------
+
+	private void handleLeftClick(final int screenX, final int screenY) {
+		if (this.viewer == null) {
+			return;
+		}
+		final float rayY = Gdx.graphics.getHeight() - screenY;
+		final RenderWidget picked = this.viewer.rayPickUnit(screenX, rayY);
+		if (picked != null) {
+			this.selectedUnits.clear();
+			this.selectedUnits.add(picked);
+			this.viewer.doSelectUnit(new ArrayList<>(this.selectedUnits));
+			if (picked instanceof RenderUnit) {
+				final CUnit cu = ((RenderUnit) picked).getSimulationUnit();
+				this.game.status("selected " + cu.getUnitType().getName() + " @ (" + Math.round(cu.getX())
+						+ ", " + Math.round(cu.getY()) + ") for player " + cu.getPlayerIndex());
+			}
+		}
+		else {
+			this.selectedUnits.clear();
+			this.viewer.deselect();
+		}
+	}
+
+	private void handleRightClick(final int screenX, final int screenY) {
+		if ((this.viewer == null) || (this.orderListener == null) || this.selectedUnits.isEmpty()) {
+			return;
+		}
+		final int rayY = Gdx.graphics.getHeight() - screenY;
+		// Resolve the ground point under the cursor. Lift above water for any unit
+		// that requires land pathing — conservative default for first-cut harness.
+		final boolean allowWaterTarget = anySelectedUnitAllowsWater();
+		this.viewer.getClickLocation(this.clickLocationTemp, screenX, rayY, allowWaterTarget, true);
+		this.clickLocationTemp2.set(this.clickLocationTemp.x, this.clickLocationTemp.y);
+
+		int ordered = 0;
+		for (final RenderWidget widget : this.selectedUnits) {
+			if (!(widget instanceof RenderUnit)) {
+				continue;
+			}
+			final CUnit unit = ((RenderUnit) widget).getSimulationUnit();
+			if (unit.getPlayerIndex() != LOCAL_PLAYER_INDEX) {
+				continue;
+			}
+			// Find the first ability on this unit that can execute a "smart" order
+			// at the clicked point (for most units that's the move ability, for
+			// workers it might be mine-harvest etc.). Mirrors MeleeUI.rightClickMove.
+			for (final CAbility ability : unit.getAbilities()) {
+				ability.checkCanUse(this.viewer.simulation, unit, OrderIds.smart,
+						BooleanAbilityActivationReceiver.INSTANCE);
+				if (!BooleanAbilityActivationReceiver.INSTANCE.isOk()) {
+					continue;
+				}
+				ability.checkCanTarget(this.viewer.simulation, unit, OrderIds.smart, this.clickLocationTemp2,
+						PointAbilityTargetCheckReceiver.INSTANCE);
+				final Vector2 target = PointAbilityTargetCheckReceiver.INSTANCE.getTarget();
+				if (target == null) {
+					continue;
+				}
+				this.orderListener.issuePointOrder(unit.getHandleId(), ability.getHandleId(), OrderIds.smart,
+						target.x, target.y, false);
+				ordered++;
+				break;
+			}
+		}
+		if (ordered > 0) {
+			this.viewer.showConfirmation(this.clickLocationTemp, 0, 1, 0);
+		}
+	}
+
+	private boolean anySelectedUnitAllowsWater() {
+		for (final RenderWidget widget : this.selectedUnits) {
+			if (widget instanceof RenderUnit) {
+				if (((RenderUnit) widget).getSimulationUnit().isMovementOnWaterAllowed()) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	@Override

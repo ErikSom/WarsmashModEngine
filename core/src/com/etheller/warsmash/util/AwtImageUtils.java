@@ -113,7 +113,8 @@ public final class AwtImageUtils {
 
 	public static AnyExtensionImage getAnyExtensionImageFixRGB(final DataSource dataSource, final String path,
 			final String errorType) throws IOException {
-		if (path.toLowerCase().endsWith(".blp")) {
+		final String lowerPath = path.toLowerCase();
+		if (lowerPath.endsWith(".blp")) {
 			try (InputStream stream = dataSource.getResourceAsStream(path)) {
 				if (stream == null) {
 					final String tgaPath = path.substring(0, path.length() - 4) + ".tga";
@@ -134,6 +135,26 @@ public final class AwtImageUtils {
 				}
 				final BufferedImage image = ImageIO.read(stream);
 				return new AnyExtensionImage(true, image);
+			}
+		}
+		// Direct .tga / .dds / .png input — previously unsupported; added so callers
+		// (e.g. MeleeUI's minimap loader) can use the platform-agnostic
+		// {@code ImageUtils.getAnyExtensionTexture} regardless of which container
+		// format the map actually ships (matches WebTextureDecoder's behaviour).
+		if (lowerPath.endsWith(".tga")) {
+			try (final InputStream tgaStream = dataSource.getResourceAsStream(path)) {
+				if (tgaStream != null) {
+					final BufferedImage tgaData = TgaFile.readTGA(path, tgaStream);
+					return new AnyExtensionImage(false, tgaData);
+				}
+			}
+		}
+		else if (lowerPath.endsWith(".dds") || lowerPath.endsWith(".png")) {
+			try (final InputStream stream = dataSource.getResourceAsStream(path)) {
+				if (stream != null) {
+					final BufferedImage image = ImageIO.read(stream);
+					return new AnyExtensionImage(false, image);
+				}
 			}
 		}
 		throw new IllegalStateException("Missing " + errorType + ": " + path);

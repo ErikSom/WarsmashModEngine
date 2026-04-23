@@ -63,7 +63,6 @@ import com.etheller.warsmash.parsers.fdf.frames.UIFrame;
 import com.etheller.warsmash.parsers.jass.Jass2.RootFrameListener;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
-import com.etheller.warsmash.util.AwtImageUtils;
 import com.etheller.warsmash.util.FastNumberFormat;
 import com.etheller.warsmash.util.ImageUtils;
 import com.etheller.warsmash.util.RgbaImage;
@@ -81,7 +80,6 @@ import com.etheller.warsmash.viewer5.handlers.mdx.MdxModel;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxNode;
 import com.etheller.warsmash.viewer5.handlers.mdx.ReplaceableIds;
 import com.etheller.warsmash.viewer5.handlers.mdx.SequenceLoopMode;
-import com.etheller.warsmash.viewer5.handlers.tga.TgaFile;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.SecondaryTag;
@@ -491,15 +489,11 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 				13.75f * this.heightRatioCorrection, 278.75f * this.widthRatioCorrection,
 				276.25f * this.heightRatioCorrection);
 		Texture minimapTexture = null;
+		// Minimap: go through the platform-agnostic {@code ImageUtils.textureDecoder}
+		// so the web backend's pure-Java TGA decoder gets used instead of the AWT
+		// {@link TgaFile} path. Desktop still uses AWT via {@code AwtImageUtils}.
 		if (war3MapViewer.dataSource.has("war3mapMap.tga")) {
-			try {
-				minimapTexture = AwtImageUtils.getTextureNoColorCorrection(TgaFile.readTGA("war3mapMap.tga",
-						war3MapViewer.dataSource.getResourceAsStream("war3mapMap.tga")));
-			}
-			catch (final IOException e) {
-				System.err.println("Could not load minimap TGA file");
-				e.printStackTrace();
-			}
+			minimapTexture = ImageUtils.getAnyExtensionTexture(war3MapViewer.dataSource, "war3mapMap.tga");
 		}
 		else if (war3MapViewer.dataSource.has("war3mapMap.blp")) {
 			minimapTexture = ImageUtils.getAnyExtensionTexture(war3MapViewer.dataSource, "war3mapMap.blp");
