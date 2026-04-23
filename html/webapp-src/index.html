@@ -284,11 +284,21 @@
 			el('overlay').style.display = 'none';
 			el('canvas-wrap').style.display = 'flex';
 			spawnExtractionWorker();
-			const s = document.createElement('script');
-			s.src = versionedAsset('app.js');
-			s.charset = 'utf-8';
-			s.onload = () => { if (typeof main === 'function') main(); };
-			document.body.appendChild(s);
+			// jpeg-js decodes WC3's 4-channel JPEG BLPs preserving their BGRA alpha
+			// component, which the browser's native createImageBitmap/canvas path
+			// silently discards. BrowserImageBridge.decodeJpegBlpMipToRgba calls into
+			// this; it must be loaded before app.js runs.
+			const jpeg = document.createElement('script');
+			jpeg.src = versionedAsset('scripts/jpeg-js.js');
+			jpeg.charset = 'utf-8';
+			jpeg.onload = () => {
+				const s = document.createElement('script');
+				s.src = versionedAsset('app.js');
+				s.charset = 'utf-8';
+				s.onload = () => { if (typeof main === 'function') main(); };
+				document.body.appendChild(s);
+			};
+			document.body.appendChild(jpeg);
 		}
 
 		// Async: recursively list OPFS /extracted. Returns newline-joined
