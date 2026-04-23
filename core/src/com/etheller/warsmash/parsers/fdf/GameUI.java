@@ -15,7 +15,6 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
@@ -93,7 +92,7 @@ public final class GameUI extends AbstractUIFrame implements UIFrame, SkinResolv
 	private final Map<String, Texture> pathToTexture = new HashMap<>();
 	private boolean autoPosition = true;
 	private final FontGeneratorHolder fontGenerator;
-	private final FreeTypeFontParameter fontParam;
+	private final FontParameter fontParam;
 	private final Map<String, UIFrame> nameToFrame = new HashMap<>();
 	private final Viewport fdfCoordinateResolutionDummyViewport;
 	private final DataTable skinData;
@@ -123,14 +122,15 @@ public final class GameUI extends AbstractUIFrame implements UIFrame, SkinResolv
 		}
 		this.templates = new FrameTemplateEnvironment();
 
-		this.dynamicFontGeneratorHolder = new DynamicFontGeneratorHolder(this.modelViewer.dataSource, this.skin);
+		this.dynamicFontGeneratorHolder = DynamicFontGeneratorHolderFactory.create(this.modelViewer.dataSource,
+				this.skin);
 		this.fontGenerator = this.dynamicFontGeneratorHolder.getFontGenerator("MasterFont");
-		final FreeTypeFontParameter fontParam = new FreeTypeFontParameter();
+		final FontParameter fontParam = new FontParameter();
 		fontParam.size = 32;
 		this.font = this.fontGenerator.generateFont(fontParam);
 		fontParam.size = 20;
 		this.font20 = this.fontGenerator.generateFont(fontParam);
-		this.fontParam = new FreeTypeFontParameter();
+		this.fontParam = new FontParameter();
 		this.fdfCoordinateResolutionDummyViewport = new FitViewport(0.8f, 0.6f);
 		this.skinData = skin.getSkinsTable();
 		this.errorStrings = this.skinData.get("Errors");

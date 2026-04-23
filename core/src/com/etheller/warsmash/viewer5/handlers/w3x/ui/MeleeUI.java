@@ -28,7 +28,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
+import com.etheller.warsmash.parsers.fdf.FontParameter;
 import com.badlogic.gdx.graphics.glutils.PixmapTextureData;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
@@ -358,7 +358,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	private List<RenderUnit> selectedUnits = Collections.emptyList();
 	private Set<RenderUnit> dragSelectPreviewUnits = new HashSet<>();
 	private Set<RenderUnit> dragSelectPreviewUnitsUpcoming = new HashSet<>();
-	private final FreeTypeFontParameter textTagFontParam = new FreeTypeFontParameter();
+	private final FontParameter textTagFontParam = new FontParameter();
 	private SetPoint uberTipNoResourcesSetPoint;
 	private SetPoint uberTipWithResourcesSetPoint;
 	private TextureFrame primaryAttributeIcon;

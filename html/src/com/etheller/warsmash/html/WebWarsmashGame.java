@@ -26,6 +26,12 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 
 		ImageUtils.textureDecoder = new WebTextureDecoder();
 		com.etheller.warsmash.util.Platform.urlOpener = WebPlatform::openUrl;
+		// Keep FreeType entirely off the web reachability graph by installing the
+		// web-only DynamicFontGeneratorHolder. Anything that constructs a GameUI
+		// goes through the factory and lands on this stub rather than
+		// FreeTypeDynamicFontGeneratorHolder.
+		com.etheller.warsmash.parsers.fdf.DynamicFontGeneratorHolderFactory.install(
+				WebDynamicFontGeneratorHolder::new);
 
 		// WebGL2 is strict where desktop GL was lax; log GL errors instead of
 		// hard-throwing so rendering progresses past the first WebGL-specific

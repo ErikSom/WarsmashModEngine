@@ -48,6 +48,8 @@ public class DesktopLauncher {
 	public static void main(final String[] arg) {
 		System.out.println("Warsmash engine is starting...");
 		com.etheller.warsmash.util.ImageUtils.textureDecoder = com.etheller.warsmash.util.AwtImageUtils.DECODER;
+		com.etheller.warsmash.parsers.fdf.DynamicFontGeneratorHolderFactory.install(
+				com.etheller.warsmash.parsers.fdf.FreeTypeDynamicFontGeneratorHolder::new);
 		com.etheller.warsmash.util.Platform.urlOpener = url -> {
 			try {
 				if (java.awt.Desktop.isDesktopSupported()
