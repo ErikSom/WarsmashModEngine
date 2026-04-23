@@ -80,6 +80,40 @@ final class BrowserImageBridge {
 
 	@JSBody(params = { "jpegBytes", "alphaBytes", "alphaDepth", "pictureType", "width", "height", "ok", "err" },
 			script = ""
+					// Fast path: when the BLP header says alphaDepth==0 the texture is
+					// fully opaque, so we don't need the JPEG's 4th component and can let
+					// the browser's native JPEG decoder (which runs on a background thread
+					// pool and can actually parallelise across preload pump workers) do
+					// the heavy lifting. The colours come back in BGRA-in-RGBA-slots
+					// convention, so an R/B swap restores RGB order before we ship to GL.
+					+ "if (alphaDepth === 0) {"
+					+ "  try {"
+					+ "    var jpeg0 = new Uint8Array(jpegBytes.buffer, jpegBytes.byteOffset, jpegBytes.byteLength);"
+					+ "    var canvas0 = (typeof OffscreenCanvas !== 'undefined')"
+					+ "      ? new OffscreenCanvas(width, height)"
+					+ "      : (function(){ var c = document.createElement('canvas'); c.width = width; c.height = height; return c; })();"
+					+ "    createImageBitmap(new Blob([jpeg0], { type: 'image/jpeg' }))"
+					+ "      .then(function(bitmap) {"
+					+ "        var ctx = canvas0.getContext('2d', { willReadFrequently: true });"
+					+ "        if (!ctx) { throw new Error('2d context unavailable'); }"
+					+ "        ctx.drawImage(bitmap, 0, 0, width, height);"
+					+ "        if (bitmap.close) { bitmap.close(); }"
+					+ "        var image = ctx.getImageData(0, 0, width, height);"
+					+ "        var data = image.data;"
+					+ "        var out0 = new Int8Array(data.length);"
+					+ "        for (var i = 0; i < data.length; i += 4) {"
+					+ "          var r = data[i], g = data[i + 1], b = data[i + 2];"
+					+ "          out0[i]     = (b > 127) ? (b - 256) : b;"
+					+ "          out0[i + 1] = (g > 127) ? (g - 256) : g;"
+					+ "          out0[i + 2] = (r > 127) ? (r - 256) : r;"
+					+ "          out0[i + 3] = -1;"  // 255 signed
+					+ "        }"
+					+ "        ok(out0);"
+					+ "      })"
+					+ "      .catch(function(e) { err(e && e.message ? e.message : String(e)); });"
+					+ "    return;"
+					+ "  } catch (e) { /* fall through to jpeg-js path */ }"
+					+ "}"
 					+ "try {"
 					+ "  if (!window['jpeg-js'] || !window['jpeg-js'].JpegImage) {"
 					+ "    err('jpeg-js library not loaded'); return;"
