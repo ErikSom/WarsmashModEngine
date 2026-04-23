@@ -42,6 +42,7 @@ import com.etheller.warsmash.viewer5.gl.AudioExtension;
 import com.etheller.warsmash.viewer5.gl.DynamicShadowExtension;
 import com.etheller.warsmash.viewer5.gl.Extensions;
 import com.etheller.warsmash.viewer5.gl.WireframeExtension;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.parser.AbilityBuilderConfigLoader;
 
 public class DesktopLauncher {
 	public static void main(final String[] arg) {
@@ -151,6 +152,7 @@ public class DesktopLauncher {
 	}
 
 	public static void loadExtensions() {
+		AbilityBuilderConfigLoader.register(DesktopAbilityBuilderConfigLoader.INSTANCE);
 		LwjglNativesLoader.load();
 		Extensions.angleInstancedArrays = new ANGLEInstancedArrays() {
 			@Override

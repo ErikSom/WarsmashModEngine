@@ -83,6 +83,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 	private final WarsmashGdxMenuScreen menuScreen;
 	private final CPlayerUnitOrderListener uiOrderListener;
 	private CommonEnvironment commonEnv;
+	private GameUI gameUI;
 
 	public WarsmashGdxMapScreen(final War3MapViewer mapViewer, final WarsmashGdxMultiScreenGame screenManager,
 			final WarsmashGdxMenuScreen menuScreen, final CPlayerUnitOrderListener uiOrderListener) {
@@ -188,7 +189,8 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 				cameraPresets, cameraRates, this.viewer, new RootFrameListener() {
 					@Override
 					public void onCreate(final GameUI rootFrame) {
-						WarsmashGdxMapScreen.this.viewer.setGameUI(rootFrame);
+						WarsmashGdxMapScreen.this.gameUI = rootFrame;
+						WarsmashGdxMapScreen.this.viewer.setAbilityDataUiSkinResolver(rootFrame);
 					}
 				}, this.uiOrderListener, new Runnable() {
 					@Override
@@ -217,8 +219,8 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		catch (final IOException e) {
 			throw new RuntimeException(e);
 		}
-		this.commonEnv = Jass2.loadCommon(this.viewer.mapMpq, this.uiViewport, this.uiScene, this.viewer, this.meleeUI,
-				WarsmashConstants.JASS_FILE_LIST);
+		this.commonEnv = Jass2.loadCommon(this.viewer.mapMpq, this.uiViewport, this.uiScene, this.viewer, this.gameUI,
+				this.meleeUI, WarsmashConstants.JASS_FILE_LIST);
 		this.commonEnv.main();
 	}
 
@@ -288,7 +290,9 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 	public void dispose() {
 		this.meleeUI.dispose();
 		this.batch.dispose();
-		this.viewer.getGameUI().dispose();
+		if (this.gameUI != null) {
+			this.gameUI.dispose();
+		}
 	}
 
 	@Override
@@ -470,7 +474,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		}
 
 		@Override
-		protected void load(final InputStream src, final Object options) {
+		protected void load(final Object src, final Object options) {
 		}
 
 		@Override

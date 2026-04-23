@@ -1,6 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation;
 
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -19,6 +18,7 @@ import com.etheller.interpreter.ast.scope.GlobalScope;
 import com.etheller.interpreter.ast.scope.TriggerExecutionScope;
 import com.etheller.interpreter.ast.scope.trigger.Trigger;
 import com.etheller.warsmash.parsers.jass.scope.CommonTriggerExecutionScope;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
@@ -367,7 +367,7 @@ public class CUnit extends CWidget {
 		beginBehavior(game, this.defaultBehavior);
 	}
 
-	public void regeneratePathingInstance(final CSimulation game, final BufferedImage buildingPathingPixelMap) {
+	public void regeneratePathingInstance(final CSimulation game, final RgbaImage buildingPathingPixelMap) {
 		float unitX = getX();
 		float unitY = getY();
 		unitX = (float) Math.floor(unitX / 64f) * 64f;
@@ -3148,7 +3148,7 @@ public class CUnit extends CWidget {
 			final CUnit targetUnit = (CUnit) target;
 			final CUnitType targetUnitType = targetUnit.getUnitType();
 			if (targetUnit.isBuilding() && (targetUnitType.getBuildingPathingPixelMap() != null)) {
-				final BufferedImage buildingPathingPixelMap = targetUnitType.getBuildingPathingPixelMap();
+				final RgbaImage buildingPathingPixelMap = targetUnitType.getBuildingPathingPixelMap();
 				final float targetX = target.getX();
 				final float targetY = target.getY();
 				if (canReachToPathing(range, targetUnit.getFacing(), buildingPathingPixelMap, targetX, targetY)) {
@@ -3159,7 +3159,7 @@ public class CUnit extends CWidget {
 		else if (target instanceof CDestructable) {
 			final CDestructable targetDest = (CDestructable) target;
 			final CDestructableType targetDestType = targetDest.getDestType();
-			final BufferedImage pathingPixelMap = targetDest.isDead() ? targetDestType.getPathingDeathPixelMap()
+			final RgbaImage pathingPixelMap = targetDest.isDead() ? targetDestType.getPathingDeathPixelMap()
 					: targetDestType.getPathingPixelMap();
 			final float targetX = target.getX();
 			final float targetY = target.getY();
@@ -3175,7 +3175,7 @@ public class CUnit extends CWidget {
 	}
 
 	public boolean canReachToPathing(final float range, final float rotationForPathing,
-			final BufferedImage buildingPathingPixelMap, final float targetX, final float targetY) {
+			final RgbaImage buildingPathingPixelMap, final float targetX, final float targetY) {
 		if (buildingPathingPixelMap == null) {
 			return canReach(targetX, targetY, range);
 		}
@@ -3225,7 +3225,7 @@ public class CUnit extends CWidget {
 		return false;
 	}
 
-	private int getRGBFromPixelData(final BufferedImage buildingPathingPixelMap, final int checkX, final int checkY,
+	private int getRGBFromPixelData(final RgbaImage buildingPathingPixelMap, final int checkX, final int checkY,
 			final int rotation) {
 
 		// Below: y is downwards (:()

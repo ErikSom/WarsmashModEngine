@@ -1,10 +1,9 @@
 package com.etheller.warsmash.viewer5.handlers.w3x;
 
-import java.awt.image.BufferedImage;
-
 import com.badlogic.gdx.math.Quaternion;
 import com.etheller.warsmash.units.GameObject;
 import com.etheller.warsmash.util.RenderMathUtils;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxComplexInstance;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxModel;
 
@@ -14,7 +13,7 @@ public class TerrainDoodad {
 	private final GameObject row;
 
 	public TerrainDoodad(final War3MapViewer map, final MdxModel model, final GameObject row,
-			final com.etheller.warsmash.parsers.w3x.doo.TerrainDoodad doodad, final BufferedImage pathingTextureImage) {
+			final com.etheller.warsmash.parsers.w3x.doo.TerrainDoodad doodad, final RgbaImage pathingTextureImage) {
 		final float[] centerOffset = map.terrain.centerOffset;
 		final MdxComplexInstance instance = (MdxComplexInstance) model.addInstance(0);
 

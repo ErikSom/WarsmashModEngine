@@ -1,7 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors;
 
-import java.awt.geom.Point2D;
-import java.awt.geom.Point2D.Float;
 import java.util.List;
 
 import com.badlogic.gdx.math.Rectangle;
@@ -19,6 +17,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.pathing.CPathfindingProcessor;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.pathing.PathingPoint;
 
 public class CBehaviorMove implements CBehavior {
 	private static boolean ALWAYS_INTERRUPT_MOVE = false;
@@ -34,9 +33,9 @@ public class CBehaviorMove implements CBehavior {
 	}
 
 	private boolean wasWithinPropWindow = false;
-	private List<Point2D.Float> path = null;
+	private List<PathingPoint> path = null;
 	private CPathfindingProcessor.GridMapping gridMapping;
-	private Point2D.Float target;
+	private PathingPoint target;
 	private int searchCycles = 0;
 	private CUnit followUnit;
 	private CRangedBehavior rangedBehavior;
@@ -69,7 +68,7 @@ public class CBehaviorMove implements CBehavior {
 		this.gridMapping = CPathfindingProcessor.isCollisionSizeBetterSuitedForCorners(
 				this.unit.getUnitType().getCollisionSize()) ? CPathfindingProcessor.GridMapping.CORNERS
 						: CPathfindingProcessor.GridMapping.CELLS;
-		this.target = new Point2D.Float(targetX, targetY);
+		this.target = new PathingPoint(targetX, targetY);
 		this.path = null;
 		this.searchCycles = 0;
 		this.followUnit = null;
@@ -84,7 +83,7 @@ public class CBehaviorMove implements CBehavior {
 		this.gridMapping = CPathfindingProcessor.isCollisionSizeBetterSuitedForCorners(
 				this.unit.getUnitType().getCollisionSize()) ? CPathfindingProcessor.GridMapping.CORNERS
 						: CPathfindingProcessor.GridMapping.CELLS;
-		this.target = new Float(followUnit.getX(), followUnit.getY());
+		this.target = new PathingPoint(followUnit.getX(), followUnit.getY());
 		this.path = null;
 		this.searchCycles = 0;
 		this.followUnit = followUnit;
@@ -169,7 +168,7 @@ public class CBehaviorMove implements CBehavior {
 				currentTargetY = this.followUnit.getY();
 			}
 			else {
-				final Point2D.Float nextPathElement = this.path.get(0);
+				final PathingPoint nextPathElement = this.path.get(0);
 				currentTargetX = nextPathElement.x;
 				currentTargetY = nextPathElement.y;
 			}
@@ -253,7 +252,7 @@ public class CBehaviorMove implements CBehavior {
 						}
 						else {
 							System.out.println(this.path);
-							final Float removed = this.path.remove(0);
+							final PathingPoint removed = this.path.remove(0);
 							System.out.println(
 									"We think we reached  " + removed + " because we are at " + nextX + "," + nextY);
 							final boolean emptyPath = this.path.isEmpty();
@@ -273,7 +272,7 @@ public class CBehaviorMove implements CBehavior {
 									currentTargetY = this.followUnit.getY();
 								}
 								else {
-									final Point2D.Float firstPathElement = this.path.get(0);
+									final PathingPoint firstPathElement = this.path.get(0);
 									currentTargetX = firstPathElement.x;
 									currentTargetY = firstPathElement.y;
 								}
@@ -407,7 +406,7 @@ public class CBehaviorMove implements CBehavior {
 		return this.unit;
 	}
 
-	public void pathFound(final List<Point2D.Float> waypoints, final CSimulation simulation) {
+	public void pathFound(final List<PathingPoint> waypoints, final CSimulation simulation) {
 		this.pathfindingActive = false;
 
 		final float prevX = this.unit.getX();
@@ -436,13 +435,13 @@ public class CBehaviorMove implements CBehavior {
 				float lastY = startFloatingY;
 				float smoothingGroupStartX = startFloatingX;
 				float smoothingGroupStartY = startFloatingY;
-				final Point2D.Float firstPathElement = this.path.get(0);
+				final PathingPoint firstPathElement = this.path.get(0);
 				double totalPathDistance = firstPathElement.distance(lastX, lastY);
 				lastX = firstPathElement.x;
 				lastY = firstPathElement.y;
 				int smoothingStartIndex = -1;
 				for (int i = 0; i < (this.path.size() - 1); i++) {
-					final Point2D.Float nextPossiblePathElement = this.path.get(i + 1);
+					final PathingPoint nextPossiblePathElement = this.path.get(i + 1);
 					totalPathDistance += nextPossiblePathElement.distance(lastX, lastY);
 					if ((totalPathDistance < (1.15
 							* nextPossiblePathElement.distance(smoothingGroupStartX, smoothingGroupStartY)))
@@ -460,7 +459,7 @@ public class CBehaviorMove implements CBehavior {
 							i = smoothingStartIndex;
 						}
 						smoothingStartIndex = -1;
-						final Point2D.Float smoothGroupNext = this.path.get(i);
+						final PathingPoint smoothGroupNext = this.path.get(i);
 						smoothingGroupStartX = smoothGroupNext.x;
 						smoothingGroupStartY = smoothGroupNext.y;
 						totalPathDistance = nextPossiblePathElement.distance(smoothGroupNext);
@@ -470,7 +469,7 @@ public class CBehaviorMove implements CBehavior {
 				}
 				if (smoothingStartIndex != -1) {
 					for (int j = smoothingStartIndex; j < (this.path.size() - 1); j++) {
-						final Point2D.Float removed = this.path.remove(j);
+						final PathingPoint removed = this.path.remove(j);
 					}
 				}
 			}

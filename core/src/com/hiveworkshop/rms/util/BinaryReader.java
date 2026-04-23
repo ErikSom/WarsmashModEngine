@@ -91,7 +91,7 @@ public class BinaryReader {
 	}
 
 	public long readUInt32() {
-		return Integer.toUnsignedLong(this.buffer.getInt());
+		return this.buffer.getInt() & 0xFFFFFFFFL;
 	}
 
 	public float readFloat32() {

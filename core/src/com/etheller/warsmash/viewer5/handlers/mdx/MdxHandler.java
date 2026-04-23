@@ -2,6 +2,8 @@ package com.etheller.warsmash.viewer5.handlers.mdx;
 
 import java.util.ArrayList;
 
+import com.badlogic.gdx.Application.ApplicationType;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.etheller.warsmash.viewer5.HandlerResource;
 import com.etheller.warsmash.viewer5.ModelViewer;
@@ -44,7 +46,13 @@ public class MdxHandler extends ModelHandler {
 		this.shaders.particles = viewer.webGL.createShaderProgram(MdxShaders.vsParticles(), MdxShaders.fsParticles);
 		// Shaders.simple = viewer.webGL.createShaderProgram(MdxShaders.vsSimple,
 		// MdxShaders.fsSimple);
-		this.shaders.hd = viewer.webGL.createShaderProgram(MdxShaders.vsHd, MdxShaders.fsHd());
+		if ((Gdx.app != null) && (Gdx.app.getType() == ApplicationType.WebGL)) {
+			// HD shaders are desktop-GL specific and not needed for classic SD assets.
+			this.shaders.hd = this.shaders.complex;
+		}
+		else {
+			this.shaders.hd = viewer.webGL.createShaderProgram(MdxShaders.vsHd, MdxShaders.fsHd());
+		}
 		// TODO HD reforged
 
 		// If a shader failed to compile, don't allow the handler to be registered, and

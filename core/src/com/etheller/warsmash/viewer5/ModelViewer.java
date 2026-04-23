@@ -153,7 +153,7 @@ public abstract class ModelViewer {
 				if (this.dataSource.has(ddsPath)) {
 					finalSrc = ddsPath;
 				}
-				else {
+				else if (!isExpectedOptionalMissingPath(finalSrc)) {
 					System.err.println("Attempting to load non-existant file: " + finalSrc);
 				}
 			}
@@ -184,7 +184,7 @@ public abstract class ModelViewer {
 
 				final ResourceHandler handler = (ResourceHandler) handlerAndDataType[0];
 				final Resource resource = handler.construct(new ResourceHandlerConstructionParams(this, handler,
-						extension, pathSolver, isFetch ? finalSrc : ""));
+						extension, pathSolver, finalSrc));
 
 				this.resources.add(resource);
 
@@ -194,7 +194,15 @@ public abstract class ModelViewer {
 
 				// TODO this is a synchronous hack, skipped some Ghostwolf code
 				try {
-					resource.loadData(this.dataSource.getResourceAsStream(finalSrc), null);
+					final Object resourceData;
+					if ("arrayBuffer".equals(handlerAndDataType[1])) {
+						final ByteBuffer buffer = this.dataSource.read(finalSrc);
+						resourceData = (buffer != null) ? buffer : this.dataSource.getResourceAsStream(finalSrc);
+					}
+					else {
+						resourceData = this.dataSource.getResourceAsStream(finalSrc);
+					}
+					resource.loadData(resourceData, null);
 				}
 				catch (final Exception e) {
 					throw new IllegalStateException("Unable to load data: " + finalSrc, e);
@@ -358,6 +366,15 @@ public abstract class ModelViewer {
 		mappers.add(mapper);
 
 		return mapper;
+	}
+
+	private static boolean isExpectedOptionalMissingPath(final String path) {
+		if (path == null) {
+			return false;
+		}
+		final String lower = path.toLowerCase();
+		return lower.endsWith("_diffuse.dds") || lower.endsWith("_normal.dds") || lower.endsWith("_orm.dds")
+				|| lower.endsWith("_.mdx");
 	}
 
 	private void onResourceLoadError() {

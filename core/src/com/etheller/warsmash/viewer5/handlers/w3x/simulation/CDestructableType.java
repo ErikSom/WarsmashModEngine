@@ -1,8 +1,8 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation;
 
-import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CTargetType;
 
 public class CDestructableType {
@@ -13,8 +13,8 @@ public class CDestructableType {
 	private final String armorType;
 	private final int buildTime;
 	private final float occlusionHeight;
-	private final BufferedImage pathingPixelMap;
-	private final BufferedImage pathingDeathPixelMap;
+	private final RgbaImage pathingPixelMap;
+	private final RgbaImage pathingDeathPixelMap;
 
 	private final int goldRepairCost;
 	private final int lumberRepairCost;
@@ -22,8 +22,8 @@ public class CDestructableType {
 
 	public CDestructableType(final String name, final float maxLife, final EnumSet<CTargetType> targetedAs,
 			final String armorType, final int buildTime, final int goldRepairCost, final int lumberRepairCost,
-			final int repairTime, final float occlusionHeight, final BufferedImage pathingPixelMap,
-			final BufferedImage pathingDeathPixelMap) {
+			final int repairTime, final float occlusionHeight, final RgbaImage pathingPixelMap,
+			final RgbaImage pathingDeathPixelMap) {
 		this.name = name;
 		this.maxLife = maxLife;
 		this.targetedAs = targetedAs;
@@ -73,11 +73,11 @@ public class CDestructableType {
 		return occlusionHeight;
 	}
 
-	public BufferedImage getPathingPixelMap() {
+	public RgbaImage getPathingPixelMap() {
 		return this.pathingPixelMap;
 	}
 
-	public BufferedImage getPathingDeathPixelMap() {
+	public RgbaImage getPathingDeathPixelMap() {
 		return this.pathingDeathPixelMap;
 	}
 }

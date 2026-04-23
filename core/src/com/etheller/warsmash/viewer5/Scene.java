@@ -287,6 +287,9 @@ public abstract class Scene {
 		if (!this.show) {
 			return;
 		}
+		if (!dynamicShadowManager.isEnabled()) {
+			return;
+		}
 		final Matrix4 depthMatrix = dynamicShadowManager.prepareShadowMatrix();
 		dynamicShadowManager.beginShadowMap(webGL);
 		Gdx.gl30.glDepthMask(true);

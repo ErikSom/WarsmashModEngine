@@ -101,9 +101,12 @@ public class RenderDoodad {
 		this.instance = instance;
 		this.row = row;
 
+		// Keep fogState = MASKED so the first updateFog tick still registers a
+		// transition and fades the vertex color to match the real fog state. But do
+		// NOT pre-zero vertexColor here — on the web port the simulation is paused
+		// and the fog-update timer never fires, leaving doodads pure black forever.
+		// applyColor() above already set the natural doodad color; let it stand.
 		this.fogState = CFogState.MASKED;
-		((MdxComplexInstance) instance).setVertexColor(VERTEX_COLOR_BLACK);
-
 	}
 
 	public void applyColor(final GameObject row, final int doodadVariation, final ModelInstance instance) {

@@ -3,6 +3,7 @@ package com.etheller.warsmash.viewer5.handlers.blp;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 import com.etheller.warsmash.util.ImageUtils;
 import com.etheller.warsmash.viewer5.GdxTextureResource;
@@ -28,7 +29,7 @@ public class BlpGdxTexture extends GdxTextureResource {
 	}
 
 	@Override
-	protected void load(final InputStream src, final Object options) {
+	protected void load(final Object src, final Object options) {
 		try {
 			final byte[] bytes = readAll(src);
 			setGdxTexture(ImageUtils.decode(bytes, true));
@@ -38,11 +39,18 @@ public class BlpGdxTexture extends GdxTextureResource {
 		}
 	}
 
-	private static byte[] readAll(final InputStream src) throws IOException {
+	private static byte[] readAll(final Object src) throws IOException {
+		if (src instanceof ByteBuffer) {
+			final ByteBuffer duplicate = ((ByteBuffer) src).duplicate();
+			duplicate.position(0);
+			final byte[] out = new byte[duplicate.remaining()];
+			duplicate.get(out);
+			return out;
+		}
 		final ByteArrayOutputStream out = new ByteArrayOutputStream(64 * 1024);
 		final byte[] buf = new byte[8192];
 		int n;
-		while ((n = src.read(buf)) > 0) {
+		while ((n = ((InputStream) src).read(buf)) > 0) {
 			out.write(buf, 0, n);
 		}
 		return out.toByteArray();

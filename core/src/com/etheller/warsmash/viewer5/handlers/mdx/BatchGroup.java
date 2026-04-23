@@ -2,6 +2,8 @@ package com.etheller.warsmash.viewer5.handlers.mdx;
 
 import java.util.List;
 
+import com.badlogic.gdx.Application.ApplicationType;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.math.Matrix4;
@@ -42,10 +44,12 @@ public class BatchGroup extends GenericGroup {
 		final WebGL webGL = viewer.webGL;
 		final SkinningType skinningType = this.skinningType;
 		final boolean hd = this.hd;
+		final boolean useHdShader = hd && ((Gdx.app == null) || (Gdx.app.getType() != ApplicationType.WebGL));
 		final ShaderProgram shader;
 		final W3xSceneLightManager lightManager = (W3xSceneLightManager) scene.getLightManager();
+		final boolean missingUnitLights = lightManager.getUnitLightCount() <= 0;
 
-		if (hd) {
+		if (useHdShader) {
 			shader = handler.shaders.hd;
 		}
 		else if (skinningType == SkinningType.ExtendedVertexGroups) {
@@ -67,7 +71,7 @@ public class BatchGroup extends GenericGroup {
 
 		webGL.useShaderProgram(shader);
 
-		shader.setUniformMatrix(hd ? "u_VP" : "u_mvp", mvp);
+		shader.setUniformMatrix(useHdShader ? "u_VP" : "u_mvp", mvp);
 
 		final DataTexture boneTexture = instance.boneTexture;
 		final DataTexture unitLightsTexture = lightManager.getUnitLightsTexture();
@@ -93,7 +97,7 @@ public class BatchGroup extends GenericGroup {
 		gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, model.arrayBuffer);
 		gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, model.elementBuffer);
 
-		if (hd) {
+		if (useHdShader) {
 			shader.setUniformi("u_diffuseMap", 0);
 			shader.setUniformi("u_normalsMap", 1);
 			shader.setUniformi("u_ormMap", 2);
@@ -110,7 +114,7 @@ public class BatchGroup extends GenericGroup {
 			tempFloat3Array[0] = camera.location.x;
 			tempFloat3Array[1] = camera.location.y;
 			tempFloat3Array[2] = camera.location.z;
-			shader.setUniform3fv("u_eyePos", tempFloat3Array, 0, 3);
+			shader.setUniformf("u_eyePos", tempFloat3Array[0], tempFloat3Array[1], tempFloat3Array[2]);
 
 			for (final int index : this.objects) {
 				final Batch batch = batches.get(index);
@@ -202,7 +206,8 @@ public class BatchGroup extends GenericGroup {
 		else {
 			shader.setUniformi("u_texture", 0);
 
-			shader.setUniform4fv("u_vertexColor", instance.vertexColor, 0, instance.vertexColor.length);
+			shader.setUniformf("u_vertexColor", instance.vertexColor[0], instance.vertexColor[1], instance.vertexColor[2],
+					instance.vertexColor[3]);
 
 			for (final int index : this.objects) {
 				final Batch batch = batches.get(index);
@@ -222,18 +227,18 @@ public class BatchGroup extends GenericGroup {
 					final int layerTexture = Math.max(0, instance.layerTextures[layerIndex]);
 					final float[] uvAnim = instance.uvAnims[layerIndex];
 
-					shader.setUniform4fv("u_geosetColor", geosetColor, 0, geosetColor.length);
+					shader.setUniformf("u_geosetColor", geosetColor[0], geosetColor[1], geosetColor[2], geosetColor[3]);
 
 					shader.setUniformf("u_layerAlpha", layerAlpha);
-					shader.setUniformi("u_unshaded", layer.unshaded != 0 ? 1 : 0);
+					shader.setUniformi("u_unshaded", ((layer.unshaded != 0) || missingUnitLights) ? 1 : 0);
 					shader.setUniformi("u_unfogged", layer.unfogged != 0 ? 1 : 0);
 					shader.setUniformf("u_fogColor", scene.fogSettings.color);
 					shader.setUniformf("u_fogParams", scene.fogSettings.style.ordinal(), scene.fogSettings.start,
 							scene.fogSettings.end, scene.fogSettings.density);
 
-					shader.setUniform2fv("u_uvTrans", uvAnim, 0, 2);
-					shader.setUniform2fv("u_uvRot", uvAnim, 2, 2);
-					shader.setUniform1fv("u_uvScale", uvAnim, 4, 1);
+					shader.setUniformf("u_uvTrans", uvAnim[0], uvAnim[1]);
+					shader.setUniformf("u_uvRot", uvAnim[2], uvAnim[3]);
+					shader.setUniformf("u_uvScale", uvAnim[4]);
 
 					if (instance.additiveOverrideMeshMode) {
 						layer.bindBlended(shader);

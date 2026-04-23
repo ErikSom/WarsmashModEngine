@@ -36,25 +36,25 @@ public class TerrainShaders {
 					"out vec3 shadeColor;\r\n" + //
 					"\r\n" + //
 					"void main() {\r\n" + //
-					"	pathing_map_uv = (vec2(vPosition.y, -vPosition.x) / 128 + vOffset.xy) * 4;\r\n" + //
+					"	pathing_map_uv = (vec2(vPosition.y, -vPosition.x) / 128.0 + vOffset.xy) * 4.0;\r\n" + //
 					" \r\n" + //
 					"	ivec2 size = textureSize(height_texture, 0);\r\n" + //
 					"   ivec2 shadowSize = textureSize(shadowMap, 0);\r\n" + //
-					"	v_suv = pathing_map_uv / shadowSize;\r\n" + //
-					"	float value = texture(height_texture, (vOffset.xy + vec2(vPosition.y + 64, -vPosition.x + 64) / 128.0) / vec2(size)).r;\r\n"
+					"	v_suv = pathing_map_uv / vec2(shadowSize);\r\n" + //
+					"	float value = texture(height_texture, (vOffset.xy + vec2(vPosition.y + 64.0, -vPosition.x + 64.0) / 128.0) / vec2(size)).r;\r\n"
 					+ //
 					"\r\n" + //
-					"   position = (vec3(vPosition.y, -vPosition.x, vPosition.z) + vec3(vOffset.xy, vOffset.z + value) * 128 );\r\n"
+					"   position = (vec3(vPosition.y, -vPosition.x, vPosition.z) + vec3(vOffset.xy, vOffset.z + value) * 128.0);\r\n"
 					+ //
-					"   vec4 myposition = vec4(position, 1);\r\n" + //
+					"   vec4 myposition = vec4(position, 1.0);\r\n" + //
 					"   myposition.x += centerOffsetX;\r\n" + //
 					"   myposition.y += centerOffsetY;\r\n" + //
-					"   position.x /= (size.x * 128.0);\r\n" + //
-					"   position.y /= (size.y * 128.0);\r\n" + //
+					"   position.x /= (float(size.x) * 128.0);\r\n" + //
+					"   position.y /= (float(size.y) * 128.0);\r\n" + //
 					"	gl_Position = MVP * myposition;\r\n" + //
 					"	UV = vec3(vUV, vOffset.a);\r\n" + //
 					"\r\n" + //
-					"	ivec2 height_pos = ivec2(vOffset.xy + vec2(vPosition.y, -vPosition.x) / 128);\r\n" + //
+					"	ivec2 height_pos = ivec2(vOffset.xy + vec2(vPosition.y, -vPosition.x) / 128.0);\r\n" + //
 					"	ivec3 off = ivec3(1, 1, 0);\r\n" + //
 					"	float hL = texelFetch(height_texture, height_pos - off.xz, 0).r;\r\n" + //
 					"	float hR = texelFetch(height_texture, height_pos + off.xz, 0).r;\r\n" + //
@@ -147,9 +147,11 @@ public class TerrainShaders {
 					"\r\n" + //
 					"void main() { \r\n" + //
 					"	ivec2 size = textureSize(terrain_texture_list, 0);\r\n" + //
+					"	vec2 sizef = vec2(size);\r\n" + //
 					"	ivec2 pos = ivec2(gl_InstanceID % size.x, gl_InstanceID / size.x);\r\n" + //
+					"	vec2 posf = vec2(pos);\r\n" + //
 					"\r\n" + //
-					"	ivec2 height_pos = ivec2(vPosition + pos);\r\n" + //
+					"	ivec2 height_pos = ivec2(vPosition + posf);\r\n" + //
 					"	vec4 height = texelFetch(height_cliff_texture, height_pos, 0);\r\n" + //
 					"\r\n" + //
 					"	ivec3 off = ivec3(1, 1, 0);\r\n" + //
@@ -159,22 +161,22 @@ public class TerrainShaders {
 					"	float hU = texelFetch(height_texture, height_pos + off.zy, 0).r;\r\n" + //
 					"	vec3 normal = normalize(vec3(hL - hR, hD - hU, 2.0));\r\n" + //
 					"\r\n" + //
-					" UV = vec2(vPosition.x, 1 - vPosition.y);\r\n" + //
+					" UV = vec2(vPosition.x, 1.0 - vPosition.y);\r\n" + //
 					// " UV = vec2(vPosition.x==0?0.01:0.99, vPosition.y==0?0.99:0.01);\r\n" + //
 					"	texture_indices = texelFetch(terrain_texture_list, pos, 0);\r\n" + //
-					"	pathing_map_uv = (vPosition + pos) * 4;	\r\n" + //
+					"	pathing_map_uv = (vPosition + posf) * 4.0;	\r\n" + //
 					"\r\n" + //
 					"	// Cliff culling\r\n" + //
-					"	vec3 positionWorld = vec3((vPosition.x + pos.x)*128.0 + centerOffsetX, (vPosition.y + pos.y)*128.0 + centerOffsetY, height.r*128.0);\r\n"
+					"	vec3 positionWorld = vec3((vPosition.x + posf.x) * 128.0 + centerOffsetX, (vPosition.y + posf.y) * 128.0 + centerOffsetY, height.r * 128.0);\r\n"
 					+ //
 					"	position = positionWorld;\r\n" + //
-					"	gl_Position = ((texture_indices.a & 32768u) == 0u) ? MVP * vec4(position.xyz, 1) : vec4(2.0, 0.0, 0.0, 1.0);\r\n"
+					"	gl_Position = ((texture_indices.a & 32768u) == 0u) ? MVP * vec4(position.xyz, 1.0) : vec4(2.0, 0.0, 0.0, 1.0);\r\n"
 					+ //
-					"	ShadowCoord = (((texture_indices.a & 32768u) == 0u) ? DepthBiasMVP * vec4(position.xyz, 1) : vec4(2.0, 0.0, 0.0, 1.0)).xyz;\r\n"
+					"	ShadowCoord = (((texture_indices.a & 32768u) == 0u) ? DepthBiasMVP * vec4(position.xyz, 1.0) : vec4(2.0, 0.0, 0.0, 1.0)).xyz;\r\n"
 					+ //
-					"   v_suv = (vPosition + pos) / size;\r\n" + //
-					"	position.x = (position.x - centerOffsetX) / (size.x * 128.0);\r\n" + //
-					"	position.y = (position.y - centerOffsetY) / (size.y * 128.0);\r\n" + //
+					"   v_suv = (vPosition + posf) / sizef;\r\n" + //
+					"	position.x = (position.x - centerOffsetX) / (sizef.x * 128.0);\r\n" + //
+					"	position.y = (position.y - centerOffsetY) / (sizef.y * 128.0);\r\n" + //
 					Shaders.lightSystem("normal", "positionWorld", "lightTexture", "lightTextureHeight", "lightCount",
 							true)
 					+ "\r\n" + //
@@ -270,11 +272,11 @@ public class TerrainShaders {
 				"\r\n" + //
 				"void main() {\r\n" + //
 				"	color = get_fragment(texture_indices.a & 31u, vec3(UV, texture_indices.a >> 5));\r\n" + //
-				"	color = color * color.a + get_fragment(texture_indices.b & 31u, vec3(UV, texture_indices.b >> 5)) * (1 - color.a);\r\n"
+				"	color = color * color.a + get_fragment(texture_indices.b & 31u, vec3(UV, texture_indices.b >> 5)) * (1.0 - color.a);\r\n"
 				+ //
-				"	color = color * color.a + get_fragment(texture_indices.g & 31u, vec3(UV, texture_indices.g >> 5)) * (1 - color.a);\r\n"
+				"	color = color * color.a + get_fragment(texture_indices.g & 31u, vec3(UV, texture_indices.g >> 5)) * (1.0 - color.a);\r\n"
 				+ //
-				"	color = color * color.a + get_fragment(texture_indices.r & 31u, vec3(UV, texture_indices.r >> 5)) * (1 - color.a);\r\n"
+				"	color = color * color.a + get_fragment(texture_indices.r & 31u, vec3(UV, texture_indices.r >> 5)) * (1.0 - color.a);\r\n"
 				+ //
 				"   float shadow = texture2D(shadowMap, v_suv).r;\r\n" + //
 				"   float fogOfWarData = texture2D(fogOfWarMap, v_suv).r;\r\n" + //
@@ -336,43 +338,44 @@ public class TerrainShaders {
 					"out vec3 shadeColor;\r\n" + //
 					"out vec2 v_suv;\r\n" + //
 					"\r\n" + //
-					"const float min_depth = 10.f / 128;\r\n" + //
-					"const float deeplevel = 64.f / 128;\r\n" + //
-					"const float maxdepth = 72.f / 128;\r\n" + //
+					"const float min_depth = 10.0 / 128.0;\r\n" + //
+					"const float deeplevel = 64.0 / 128.0;\r\n" + //
+					"const float maxdepth = 72.0 / 128.0;\r\n" + //
 					"\r\n" + //
 					"void main() { \r\n" + //
 					"	ivec2 size = textureSize(water_height_texture, 0) - 1;\r\n" + //
 					"	ivec2 pos = ivec2(gl_InstanceID % size.x, gl_InstanceID / size.x);\r\n" + //
-					"	ivec2 height_pos = ivec2(vPosition + pos);\r\n" + //
+					"	ivec2 height_pos = ivec2(vPosition + vec2(pos));\r\n" + //
 					"	float water_height = texelFetch(water_height_texture, height_pos, 0).r + water_offset;\r\n" + //
 					"\r\n" + //
-					"	bool is_water = texelFetch(water_exists_texture, pos, 0).r > 0\r\n" + //
-					"	 || texelFetch(water_exists_texture, pos + ivec2(1, 0), 0).r > 0\r\n" + //
-					"	 || texelFetch(water_exists_texture, pos + ivec2(1, 1), 0).r > 0\r\n" + //
-					"	 || texelFetch(water_exists_texture, pos + ivec2(0, 1), 0).r > 0;\r\n" + //
+					"	bool is_water = texelFetch(water_exists_texture, pos, 0).r > 0.0\r\n" + //
+					"	 || texelFetch(water_exists_texture, pos + ivec2(1, 0), 0).r > 0.0\r\n" + //
+					"	 || texelFetch(water_exists_texture, pos + ivec2(1, 1), 0).r > 0.0\r\n" + //
+					"	 || texelFetch(water_exists_texture, pos + ivec2(0, 1), 0).r > 0.0;\r\n" + //
 					"\r\n" + //
-					"   position = vec2((vPosition.x + pos.x)*128.0 + centerOffsetX, (vPosition.y + pos.y)*128.0 + centerOffsetY);\r\n"
+					"   position = vec2((vPosition.x + float(pos.x)) * 128.0 + centerOffsetX, (vPosition.y + float(pos.y)) * 128.0 + centerOffsetY);\r\n"
 					+ //
-					"   vec4 myposition = vec4(position.xy, water_height*128.0, 1);\r\n" + //
+					"   vec4 myposition = vec4(position.xy, water_height * 128.0, 1.0);\r\n" + //
 					"   vec3 Normal = vec3(0,0,1);\r\n" + //
 					"	gl_Position = is_water ? MVP * myposition : vec4(2.0, 0.0, 0.0, 1.0);\r\n" + //
 					"\r\n" + //
-					"	UV = vec2((vPosition.x + pos.x%2)/2.0, (vPosition.y + pos.y%2)/2.0);\r\n" + //
+					"	UV = vec2((vPosition.x + float(pos.x % 2)) / 2.0, (vPosition.y + float(pos.y % 2)) / 2.0);\r\n"
+					+ //
 					"\r\n" + //
 					"	float ground_height = texelFetch(ground_height_texture, height_pos, 0).r;\r\n" + //
-					"	float value = clamp(water_height - ground_height, 0.f, 1.f);\r\n" + //
+					"	float value = clamp(water_height - ground_height, 0.0, 1.0);\r\n" + //
 					"	if (value <= deeplevel) {\r\n" + //
-					"		value = max(0.f, value - min_depth) / (deeplevel - min_depth);\r\n" + //
-					"		vertexColor = shallow_color_min * (1.f - value) + shallow_color_max * value;\r\n" + //
+					"		value = max(0.0, value - min_depth) / (deeplevel - min_depth);\r\n" + //
+					"		vertexColor = shallow_color_min * (1.0 - value) + shallow_color_max * value;\r\n" + //
 					"	} else {\r\n" + //
-					"		value = clamp(value - deeplevel, 0.f, maxdepth - deeplevel) / (maxdepth - deeplevel);\r\n" + //
-					"		vertexColor = deep_color_min * (1.f - value) + deep_color_max * value;\r\n" + //
+					"		value = clamp(value - deeplevel, 0.0, maxdepth - deeplevel) / (maxdepth - deeplevel);\r\n" + //
+					"		vertexColor = deep_color_min * (1.0 - value) + deep_color_max * value;\r\n" + //
 					"	}\r\n" + //
 					Shaders.lightSystem("Normal", "myposition.xyz", "lightTexture", "lightTextureHeight", "lightCount",
 							true)
 					+ "\r\n" + //
 					"        shadeColor = clamp(lightFactor, 0.0, 1.0);\r\n" + //
-					"        v_suv = (vPosition + pos) / size;\r\n" + //
+					"        v_suv = (vPosition + vec2(pos)) / vec2(size);\r\n" + //
 					" }";
 		}
 

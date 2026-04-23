@@ -1,6 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x;
 
-import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -20,8 +19,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Consumer;
-
-import javax.imageio.ImageIO;
 
 import org.apache.commons.compress.utils.IOUtils;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
@@ -43,7 +40,6 @@ import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.datasources.MpqDataSource;
 import com.etheller.warsmash.datasources.SubdirDataSource;
 import com.etheller.warsmash.networking.GameTurnManager;
-import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.parsers.w3x.War3Map;
 import com.etheller.warsmash.parsers.w3x.doo.War3MapDoo;
 import com.etheller.warsmash.parsers.w3x.objectdata.Warcraft3MapObjectData;
@@ -64,6 +60,8 @@ import com.etheller.warsmash.util.MappedData;
 import com.etheller.warsmash.util.Quadtree;
 import com.etheller.warsmash.util.QuadtreeIntersector;
 import com.etheller.warsmash.util.RenderMathUtils;
+import com.etheller.warsmash.util.ImageUtils;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.util.WorldEditStrings;
@@ -88,7 +86,6 @@ import com.etheller.warsmash.viewer5.handlers.mdx.MdxHandler.ShaderEnvironmentTy
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxModel;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxNode;
 import com.etheller.warsmash.viewer5.handlers.mdx.SequenceLoopMode;
-import com.etheller.warsmash.viewer5.handlers.tga.TgaFile;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.SecondaryTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.SplatModel.SplatMover;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.BuildingShadow;
@@ -241,14 +238,14 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 
 	private final Random seededRandom = new Random(1337L);
 
-	private final Map<String, BufferedImage> filePathToPathingMap = new HashMap<>();
+	private final Map<String, RgbaImage> filePathToPathingMap = new HashMap<>();
 
 	private final List<SelectionCircleSize> selectionCircleSizes = new ArrayList<>();
 
 	private final Map<CUnit, RenderUnit> unitToRenderPeer = new HashMap<>();
 	private final Map<CDestructable, RenderDestructable> destructableToRenderPeer = new HashMap<>();
 	private final Map<CItem, RenderItem> itemToRenderPeer = new HashMap<>();
-	private GameUI gameUI;
+	private AbilityDataUI.SkinResolver abilityDataUiSkinResolver;
 	private Vector3 lightDirection;
 
 	private Quadtree<MdxComplexInstance> walkableObjectsTree;
@@ -631,11 +628,11 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		}
 	}
 
-	protected BufferedImage getDestructablePathingPixelMap(final GameObject row) {
+	protected RgbaImage getDestructablePathingPixelMap(final GameObject row) {
 		return loadPathingTexture(row.getFieldAsString(DESTRUCTABLE_PATHING, 0));
 	}
 
-	protected BufferedImage getDestructablePathingDeathPixelMap(final GameObject row) {
+	protected RgbaImage getDestructablePathingDeathPixelMap(final GameObject row) {
 		return loadPathingTexture(row.getFieldAsString(DESTRUCTABLE_PATHING_DEATH, 0));
 	}
 
@@ -726,20 +723,16 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			final MdxModel model = (MdxModel) load(file, this.mapPathSolver, this.solverParams);
 
 			final String pathingTexture = row.readSLKTag("pathTex");
-			BufferedImage pathingTextureImage;
+			RgbaImage pathingTextureImage;
 			if ((pathingTexture != null) && (pathingTexture.length() > 0) && !"_".equals(pathingTexture)) {
 
 				pathingTextureImage = this.filePathToPathingMap.get(pathingTexture.toLowerCase());
 				if (pathingTextureImage == null) {
-					if (this.mapMpq.has(pathingTexture)) {
-						try {
-							pathingTextureImage = TgaFile.readTGA(pathingTexture,
-									this.mapMpq.getResourceAsStream(pathingTexture));
-							this.filePathToPathingMap.put(pathingTexture.toLowerCase(), pathingTextureImage);
-						}
-						catch (final Exception exc) {
-							exc.printStackTrace();
-						}
+					try {
+						pathingTextureImage = loadPathingTexture(pathingTexture);
+					}
+					catch (final Exception exc) {
+						exc.printStackTrace();
 					}
 				}
 			}
@@ -803,7 +796,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			destructableShadow = this.terrain.addShadow(shadowString, location[0], location[1]);
 		}
 
-		final BufferedImage destructablePathingPixelMap = getDestructablePathingPixelMap(row);
+		final RgbaImage destructablePathingPixelMap = getDestructablePathingPixelMap(row);
 		if (destructablePathingPixelMap != null) {
 			destructablePathing = this.terrain.pathingGrid.createRemovablePathingOverlayTexture(location[0],
 					location[1], (int) Math.toDegrees(facingRadians), destructablePathingPixelMap);
@@ -811,7 +804,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 				destructablePathing.add();
 			}
 		}
-		final BufferedImage destructablePathingDeathPixelMap = getDestructablePathingDeathPixelMap(row);
+		final RgbaImage destructablePathingDeathPixelMap = getDestructablePathingDeathPixelMap(row);
 		if (destructablePathingDeathPixelMap != null) {
 			destructablePathingDeath = this.terrain.pathingGrid.createRemovablePathingOverlayTexture(location[0],
 					location[1], (int) Math.toDegrees(facingRadians), destructablePathingDeathPixelMap);
@@ -989,7 +982,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			float unitY, final int playerIndex, int customTeamColor, final float unitAngle) {
 		Splat buildingUberSplat = null;
 		SplatMover buildingUberSplatDynamicIngame = null;
-		BufferedImage buildingPathingPixelMap = null;
+		RgbaImage buildingPathingPixelMap = null;
 		BuildingShadow buildingShadowInstance = null;
 
 		// Hardcoded?
@@ -1106,21 +1099,16 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	}
 
 	@Override
-	public BufferedImage loadPathingTexture(final String pathingTexture) {
-		BufferedImage buildingPathingPixelMap = null;
+	public RgbaImage loadPathingTexture(final String pathingTexture) {
+		RgbaImage buildingPathingPixelMap = null;
 		if ((pathingTexture != null) && (pathingTexture.length() > 0) && !"_".equals(pathingTexture)) {
 			buildingPathingPixelMap = this.filePathToPathingMap.get(pathingTexture.toLowerCase());
 			if (buildingPathingPixelMap == null) {
 				try {
-					if (pathingTexture.toLowerCase().endsWith(".tga")) {
-						buildingPathingPixelMap = TgaFile.readTGA(pathingTexture,
-								this.mapMpq.getResourceAsStream(pathingTexture));
-					}
-					else {
-						try (InputStream stream = this.mapMpq.getResourceAsStream(pathingTexture)) {
-							buildingPathingPixelMap = ImageIO.read(stream);
-							System.out.println("LOADING BLP PATHING: " + pathingTexture);
-						}
+					final ImageUtils.DecodedImage decodedImage = ImageUtils.getAnyExtensionImageData(this.mapMpq,
+							pathingTexture);
+					if (decodedImage != null) {
+						buildingPathingPixelMap = decodedImage.getImageData();
 					}
 					this.filePathToPathingMap.put(pathingTexture.toLowerCase(), buildingPathingPixelMap);
 				}
@@ -1218,49 +1206,73 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			final Scene worldScene = this.worldScene;
 
 			startFrame();
+			assertNoGlError("startFrame");
 			worldScene.startFrame();
+			assertNoGlError("worldScene.startFrame");
 			if (DEBUG_DEPTH > 0) {
 				worldScene.renderOpaque(this.dynamicShadowManager, this.webGL);
+				assertNoGlError("worldScene.renderOpaque(shadows)");
 			}
 			if (DEBUG_DEPTH > 1) {
 				this.terrain.renderGround(this.dynamicShadowManager);
+				assertNoGlError("terrain.renderGround");
 			}
 			if (DEBUG_DEPTH > 2) {
 				this.terrain.renderCliffs();
+				assertNoGlError("terrain.renderCliffs");
 			}
 			if (DEBUG_DEPTH > 3) {
 				worldScene.renderOpaque();
+				assertNoGlError("worldScene.renderOpaque");
 			}
 			if (DEBUG_DEPTH > 4) {
 				this.terrain.renderUberSplats(false);
+				assertNoGlError("terrain.renderUberSplats(false)");
 			}
 			if (DEBUG_DEPTH > 5) {
 				this.terrain.renderWater();
+				assertNoGlError("terrain.renderWater");
 			}
 			if (DEBUG_DEPTH > 6) {
 				worldScene.renderTranslucent();
+				assertNoGlError("worldScene.renderTranslucent");
 			}
 			if (DEBUG_DEPTH > 7) {
 				this.terrain.renderUberSplats(true);
+				assertNoGlError("terrain.renderUberSplats(true)");
 			}
 
 			final List<Scene> scenes = this.scenes;
 			for (final Scene scene : scenes) {
 				if (scene != worldScene) {
 					scene.startFrame();
+					assertNoGlError("scene.startFrame");
 					if (DEBUG_DEPTH > 8) {
 						scene.renderOpaque();
+						assertNoGlError("scene.renderOpaque");
 					}
 					if (DEBUG_DEPTH > 9) {
 						scene.renderTranslucent();
+						assertNoGlError("scene.renderTranslucent");
 					}
 				}
 			}
 
-			final int glGetError = Gdx.gl.glGetError();
-			if (glGetError != GL20.GL_NO_ERROR) {
-				throw new IllegalStateException("GL ERROR: " + glGetError);
+			assertNoGlError("end of frame");
+		}
+	}
+
+	/** Platform bootstraps flip this to false on web to keep rendering going
+	 *  after a WebGL2 strictness error. */
+	public static boolean glErrorFatal = true;
+
+	private void assertNoGlError(final String stage) {
+		final int glGetError = Gdx.gl.glGetError();
+		if (glGetError != GL20.GL_NO_ERROR) {
+			if (glErrorFatal) {
+				throw new IllegalStateException("GL ERROR after " + stage + ": " + glGetError);
 			}
+			System.err.println("GL ERROR after " + stage + ": " + glGetError);
 		}
 	}
 
@@ -1782,17 +1794,20 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		return this.worldEditStrings;
 	}
 
-	public void setGameUI(final GameUI gameUI) {
-		this.gameUI = gameUI;
-		this.abilityDataUI = new AbilityDataUI(this.allObjectData, gameUI, this);
-	}
-
-	public GameUI getGameUI() {
-		return this.gameUI;
+	public void setAbilityDataUiSkinResolver(final AbilityDataUI.SkinResolver abilityDataUiSkinResolver) {
+		this.abilityDataUiSkinResolver = abilityDataUiSkinResolver;
+		this.abilityDataUI = new AbilityDataUI(this.allObjectData, abilityDataUiSkinResolver, this);
 	}
 
 	public AbilityDataUI getAbilityDataUI() {
 		return this.abilityDataUI;
+	}
+
+	private String getSkinField(final String fieldName) {
+		if (this.abilityDataUiSkinResolver == null) {
+			return null;
+		}
+		return this.abilityDataUiSkinResolver.getSkinField(fieldName);
 	}
 
 	public KeyedSounds getUiSounds() {
@@ -2773,8 +2788,12 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 							@Override
 							public void spawnUnitConstructionSound(final CUnit constructingUnit,
 									final CUnit constructedStructure) {
+								final String constructingBuildingKey = War3MapViewer.this.getSkinField("ConstructingBuilding");
+								if (constructingBuildingKey == null) {
+									return;
+								}
 								final UnitSound constructingBuilding = War3MapViewer.this.uiSounds
-										.getSound(War3MapViewer.this.gameUI.getSkinField("ConstructingBuilding"));
+										.getSound(constructingBuildingKey);
 								if (constructingBuilding != null) {
 									constructingBuilding.playUnitResponse(War3MapViewer.this.worldScene.audioContext,
 											War3MapViewer.this.unitToRenderPeer.get(constructedStructure));
@@ -2853,26 +2872,30 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 							}
 
 							@Override
-							public BufferedImage getBuildingPathingPixelMap(final War3ID rawcode) {
+							public RgbaImage getBuildingPathingPixelMap(final War3ID rawcode) {
 								return War3MapViewer.this.renderUnitTypeData.get(rawcode).getBuildingPathingPixelMap();
 							}
 
 							@Override
-							public BufferedImage getDestructablePathingDeathPixelMap(final War3ID rawcode) {
+							public RgbaImage getDestructablePathingDeathPixelMap(final War3ID rawcode) {
 								return War3MapViewer.this.getDestructablePathingDeathPixelMap(
 										War3MapViewer.this.allObjectData.getDestructibles().get(rawcode));
 							}
 
 							@Override
-							public BufferedImage getDestructablePathingPixelMap(final War3ID rawcode) {
+							public RgbaImage getDestructablePathingPixelMap(final War3ID rawcode) {
 								return War3MapViewer.this.getDestructablePathingPixelMap(
 										War3MapViewer.this.allObjectData.getDestructibles().get(rawcode));
 							}
 
 							@Override
 							public void spawnUnitConstructionFinishSound(final CUnit constructedStructure) {
+								final String jobDoneSoundKey = War3MapViewer.this.getSkinField("JobDoneSound");
+								if (jobDoneSoundKey == null) {
+									return;
+								}
 								final UnitSound constructingBuilding = War3MapViewer.this.uiSounds
-										.getSound(War3MapViewer.this.gameUI.getSkinField("JobDoneSound"));
+										.getSound(jobDoneSoundKey);
 								final RenderUnit renderUnit = War3MapViewer.this.unitToRenderPeer
 										.get(constructedStructure);
 								if ((constructingBuilding != null) && (renderUnit.getSimulationUnit()
@@ -2885,8 +2908,12 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 
 							@Override
 							public void spawnUnitUpgradeFinishSound(final CUnit constructedStructure) {
+								final String upgradeCompleteKey = War3MapViewer.this.getSkinField("UpgradeComplete");
+								if (upgradeCompleteKey == null) {
+									return;
+								}
 								final UnitSound constructingBuilding = War3MapViewer.this.uiSounds
-										.getSound(War3MapViewer.this.gameUI.getSkinField("UpgradeComplete"));
+										.getSound(upgradeCompleteKey);
 								final RenderUnit renderUnit = War3MapViewer.this.unitToRenderPeer
 										.get(constructedStructure);
 								if ((constructingBuilding != null) && (renderUnit.getSimulationUnit()

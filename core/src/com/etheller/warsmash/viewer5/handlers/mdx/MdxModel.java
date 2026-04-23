@@ -92,7 +92,17 @@ public class MdxModel extends com.etheller.warsmash.viewer5.Model<MdxHandler> {
 		if (bufferOrParser instanceof MdlxModel) {
 			parser = (MdlxModel) bufferOrParser;
 		}
+		else if (bufferOrParser instanceof ByteBuffer) {
+			parser = new MdlxModel((ByteBuffer) bufferOrParser);
+		}
 		else {
+			if (bufferOrParser == null) {
+				throw new IOException("Missing MDX bytes for " + this.fetchUrl);
+			}
+			if (!(bufferOrParser instanceof InputStream)) {
+				throw new IOException("Unsupported MDX source type " + bufferOrParser.getClass().getName() + " for "
+						+ this.fetchUrl);
+			}
 			System.err.println("Wasting memory with conversion from InputStream to buffer in MdxModel");
 			parser = new MdlxModel(ByteBuffer.wrap(IOUtils.toByteArray((InputStream) bufferOrParser)));
 		}
@@ -326,7 +336,7 @@ public class MdxModel extends com.etheller.warsmash.viewer5.Model<MdxHandler> {
 	}
 
 	@Override
-	protected void load(final InputStream src, final Object options) {
+	protected void load(final Object src, final Object options) {
 		try {
 			this.load(src);
 		}

@@ -1,9 +1,8 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.util;
 
-import java.awt.image.BufferedImage;
-
 import com.badlogic.gdx.graphics.Color;
 import com.etheller.warsmash.util.War3ID;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.viewer5.handlers.w3x.TextTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItem;
@@ -78,11 +77,11 @@ public interface SimulationRenderController {
 
 	void removeDestructable(CDestructable dest);
 
-	BufferedImage getBuildingPathingPixelMap(War3ID rawcode);
+	RgbaImage getBuildingPathingPixelMap(War3ID rawcode);
 
-	BufferedImage getDestructablePathingPixelMap(War3ID rawcode);
+	RgbaImage getDestructablePathingPixelMap(War3ID rawcode);
 
-	BufferedImage getDestructablePathingDeathPixelMap(War3ID rawcode);
+	RgbaImage getDestructablePathingDeathPixelMap(War3ID rawcode);
 
 	void spawnUnitConstructionFinishSound(CUnit constructedStructure);
 

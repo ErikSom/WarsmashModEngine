@@ -20,6 +20,7 @@ import com.badlogic.gdx.graphics.Pixmap.Format;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
 import com.etheller.warsmash.datasources.DataSource;
+import com.etheller.warsmash.util.ImageUtils.DecodedImage;
 import com.etheller.warsmash.viewer5.handlers.tga.TgaFile;
 
 /**
@@ -73,6 +74,21 @@ public final class AwtImageUtils {
 				return null;
 			}
 		}
+
+		@Override
+		public DecodedImage getAnyExtensionImageData(final DataSource dataSource, final String path) {
+			try {
+				final AnyExtensionImage imageInfo = getAnyExtensionImageFixRGB(dataSource, path, "texture");
+				if (imageInfo.getImageData() == null) {
+					return null;
+				}
+				return new DecodedImage(imageInfo.isNeedsSRGBFix(), bufferedImageToRgbaImage(imageInfo.getImageData()),
+						bufferedImageToRgbaImage(imageInfo.getRGBCorrectImageData()));
+			}
+			catch (final IOException e) {
+				return null;
+			}
+		}
 	};
 
 	/** BufferedImage → RGBA Pixmap (pixel loop). */
@@ -89,6 +105,10 @@ public final class AwtImageUtils {
 			}
 		}
 		return pm;
+	}
+
+	public static RgbaImage bufferedImageToRgbaImage(final BufferedImage image) {
+		return RgbaImage.fromPixmap(bufferedImageToPixmap(image));
 	}
 
 	public static AnyExtensionImage getAnyExtensionImageFixRGB(final DataSource dataSource, final String path,

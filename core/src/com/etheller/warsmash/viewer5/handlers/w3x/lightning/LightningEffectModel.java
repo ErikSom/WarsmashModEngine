@@ -91,7 +91,7 @@ public class LightningEffectModel extends Model<LightningEffectModelHandler> {
 	}
 
 	@Override
-	protected void load(InputStream src, Object options) {
+	protected void load(Object src, Object options) {
 		String path = textureFilePath;
 		if ("".equals(path)) {
 			path = "Textures\\white.blp";

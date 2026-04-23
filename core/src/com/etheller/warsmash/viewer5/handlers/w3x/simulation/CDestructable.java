@@ -1,11 +1,11 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation;
 
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 
 import com.badlogic.gdx.math.Rectangle;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid.RemovablePathingMapInstance;
 import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.RenderWidget.UnitAnimationListenerImpl;
@@ -54,8 +54,8 @@ public class CDestructable extends CWidget {
 
 	public Rectangle getOrCreateRegisteredEnumRectangle() {
 		if (this.registeredEnumRectangle == null) {
-			BufferedImage pathingPixelMap = this.destType.getPathingPixelMap();
-			BufferedImage pathingDeathPixelMap = this.destType.getPathingDeathPixelMap();
+			RgbaImage pathingPixelMap = this.destType.getPathingPixelMap();
+			RgbaImage pathingDeathPixelMap = this.destType.getPathingDeathPixelMap();
 			if (pathingPixelMap == null) {
 				pathingPixelMap = PathingGrid.BLANK_PATHING;
 			}

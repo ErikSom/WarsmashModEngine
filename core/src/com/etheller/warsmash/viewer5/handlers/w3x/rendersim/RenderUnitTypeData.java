@@ -1,6 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.rendersim;
 
-import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,6 +10,7 @@ import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.units.GameObject;
 import com.etheller.warsmash.units.ObjectData;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxModel;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.SecondaryTag;
@@ -78,9 +78,9 @@ public class RenderUnitTypeData extends RenderWidgetTypeData<RenderUnitType> {
 		return path;
 	}
 
-	private BufferedImage getBuildingPathingPixelMap(final GameObject row) {
+	private RgbaImage getBuildingPathingPixelMap(final GameObject row) {
 		final String pathingTexture = row.getFieldAsString(UNIT_PATHING, 0);
-		final BufferedImage buildingPathingPixelMap = this.mapViewer.loadPathingTexture(pathingTexture);
+		final RgbaImage buildingPathingPixelMap = this.mapViewer.loadPathingTexture(pathingTexture);
 		return buildingPathingPixelMap;
 	}
 
@@ -104,7 +104,7 @@ public class RenderUnitTypeData extends RenderWidgetTypeData<RenderUnitType> {
 		final MdxModel model = this.mapViewer.loadModelMdx(path);
 		final MdxModel portraitModel = getPortraitModel(path, model);
 
-		final BufferedImage buildingPathingPixelMap = getBuildingPathingPixelMap(row);
+		final RgbaImage buildingPathingPixelMap = getBuildingPathingPixelMap(row);
 
 		final String unitShadow = row.getFieldAsString(UNIT_SHADOW, 0);
 		RenderShadowType renderShadowType = null;

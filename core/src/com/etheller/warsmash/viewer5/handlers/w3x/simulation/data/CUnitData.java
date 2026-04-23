@@ -1,6 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.data;
 
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,6 +13,7 @@ import java.util.Set;
 
 import com.etheller.warsmash.units.GameObject;
 import com.etheller.warsmash.units.ObjectData;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid;
@@ -243,7 +243,7 @@ public class CUnitData {
 	}
 
 	public CUnit create(final CSimulation simulation, final int playerIndex, final War3ID typeId, final float x,
-			final float y, final float facing, final BufferedImage buildingPathingPixelMap,
+			final float y, final float facing, final RgbaImage buildingPathingPixelMap,
 			final HandleIdAllocator handleIdAllocator) {
 		final GameObject unitType = this.unitData.get(typeId.asStringValue());
 		final int handleId = handleIdAllocator.createId();
@@ -498,7 +498,7 @@ public class CUnitData {
 		}
 	}
 
-	private CUnitType getUnitTypeInstance(final War3ID typeId, final BufferedImage buildingPathingPixelMap,
+	private CUnitType getUnitTypeInstance(final War3ID typeId, final RgbaImage buildingPathingPixelMap,
 			final GameObject unitType) {
 		CUnitType unitTypeInstance = this.unitIdToUnitType.get(typeId);
 		if (unitTypeInstance == null) {
@@ -1047,7 +1047,7 @@ public class CUnitData {
 		if (unitType == null) {
 			return null;
 		}
-		final BufferedImage buildingPathingPixelMap = this.simulationRenderController
+		final RgbaImage buildingPathingPixelMap = this.simulationRenderController
 				.getBuildingPathingPixelMap(rawcode);
 		return getUnitTypeInstance(rawcode, buildingPathingPixelMap, unitType);
 	}

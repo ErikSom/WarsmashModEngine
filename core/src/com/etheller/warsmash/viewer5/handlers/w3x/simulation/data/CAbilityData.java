@@ -86,8 +86,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.def
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.CAbilityTypeDefinitionWispHarvest;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.jass.CAbilityTypeJassDefinition;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.parser.AbilityBuilderConfiguration;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.parser.AbilityBuilderConfigLoader;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.parser.AbilityBuilderDupe;
-import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.parser.AbilityBuilderParserUtil;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.parser.AbilityBuilderType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.types.definitions.impl.CAbilityTypeDefinitionAbilityTemplateBuilder;
 
@@ -282,8 +282,9 @@ public class CAbilityData {
 		System.err.println("Starting to load ability builder");
 		System.err.println("========================================================================");
 
-		if (true) {
-			AbilityBuilderParserUtil.loadAbilityBuilderFiles(behavior -> {
+		final AbilityBuilderConfigLoader abilityBuilderConfigLoader = AbilityBuilderConfigLoader.get();
+		if (abilityBuilderConfigLoader != null) {
+			abilityBuilderConfigLoader.loadAbilityBuilderFiles(behavior -> {
 				if (behavior.getType().equals(AbilityBuilderType.TEMPLATE)) {
 					for (final AbilityBuilderDupe dupe : behavior.getIds()) {
 						this.codeToAbilityTypeDefinition.put(War3ID.fromString(dupe.getId()),

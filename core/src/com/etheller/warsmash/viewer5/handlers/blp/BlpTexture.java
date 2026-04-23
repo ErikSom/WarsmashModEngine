@@ -3,9 +3,12 @@ package com.etheller.warsmash.viewer5.handlers.blp;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 import com.badlogic.gdx.graphics.Pixmap;
 import com.etheller.warsmash.util.ImageUtils;
+import com.etheller.warsmash.util.ImageUtils.DecodedImage;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.viewer5.ModelViewer;
 import com.etheller.warsmash.viewer5.PathSolver;
 import com.etheller.warsmash.viewer5.RawOpenGLTextureResource;
@@ -23,8 +26,27 @@ public class BlpTexture extends RawOpenGLTextureResource {
 	}
 
 	@Override
-	protected void load(final InputStream src, final Object options) {
+	protected void load(final Object src, final Object options) {
 		try {
+			// Prefer the direct RGBA path: on the TeaVM/web backend, funnelling pixel
+			// bytes through a {@code new Pixmap(w,h,RGBA8888)} + {@code getPixels().put(...)}
+			// round-trip silently zeroes the buffer, so every texture uploads as pure
+			// black. Upload the RgbaImage bytes straight to GL when we have them.
+			//
+			// sRGBFix=false: WebGL2's SRGB8_ALPHA8 internal format linearises pixel
+			// values at sample time, but the classic MDX shader does its colour math
+			// assuming raw (non-linearised) sRGB — so linearising darkens and desaturates
+			// the output vs. the original game. Using RGBA8 keeps the bytes straight
+			// through and matches WC3's look.
+			if ((this.fetchUrl != null) && !this.fetchUrl.isEmpty()) {
+				final DecodedImage decodedImage = ImageUtils.getAnyExtensionImageData(this.viewer.dataSource,
+						this.fetchUrl);
+				if ((decodedImage != null) && (decodedImage.getImageData() != null)) {
+					final RgbaImage rgba = decodedImage.getImageData();
+					updateFromRgba(rgba.getPixels(), rgba.getWidth(), rgba.getHeight(), false);
+					return;
+				}
+			}
 			final byte[] bytes = readAll(src);
 			final Pixmap pm = ImageUtils.decodeToPixmap(bytes);
 			if (pm != null) {
@@ -36,11 +58,18 @@ public class BlpTexture extends RawOpenGLTextureResource {
 		}
 	}
 
-	private static byte[] readAll(final InputStream src) throws IOException {
+	private static byte[] readAll(final Object src) throws IOException {
+		if (src instanceof ByteBuffer) {
+			final ByteBuffer duplicate = ((ByteBuffer) src).duplicate();
+			duplicate.position(0);
+			final byte[] out = new byte[duplicate.remaining()];
+			duplicate.get(out);
+			return out;
+		}
 		final ByteArrayOutputStream out = new ByteArrayOutputStream(64 * 1024);
 		final byte[] buf = new byte[8192];
 		int n;
-		while ((n = src.read(buf)) > 0) {
+		while ((n = ((InputStream) src).read(buf)) > 0) {
 			out.write(buf, 0, n);
 		}
 		return out.toByteArray();

@@ -74,10 +74,11 @@ import com.etheller.warsmash.viewer5.Scene;
 import com.etheller.warsmash.viewer5.handlers.AbstractMdxModelViewer;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxModel;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
+import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.ability.AbilityDataUI.SkinResolver;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.command.FocusableFrame;
 import com.hiveworkshop.rms.parsers.mdlx.MdlxLayer.FilterMode;
 
-public final class GameUI extends AbstractUIFrame implements UIFrame {
+public final class GameUI extends AbstractUIFrame implements UIFrame, SkinResolver {
 	private static final boolean SHOW_BLACKNESS_BEHIND_DIALOGS = false;
 	public static final boolean DEBUG = false;
 	public static final boolean DEBUG_LOG = false;

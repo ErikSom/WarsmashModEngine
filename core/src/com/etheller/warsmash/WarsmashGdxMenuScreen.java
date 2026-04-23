@@ -899,7 +899,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 		}
 
 		@Override
-		protected void load(final InputStream src, final Object options) {
+		protected void load(final Object src, final Object options) {
 		}
 
 		@Override

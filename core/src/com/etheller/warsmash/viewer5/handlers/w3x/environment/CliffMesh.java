@@ -49,8 +49,8 @@ public class CliffMesh {
 
 			this.indices = geoset.getFaces().length;
 			this.indexBuffer = gl.glGenBuffer();
-			gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, this.indexBuffer);
-			gl.glBufferData(GL20.GL_ARRAY_BUFFER, geoset.getFaces().length * 2,
+			gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+			gl.glBufferData(GL20.GL_ELEMENT_ARRAY_BUFFER, geoset.getFaces().length * 2,
 					RenderMathUtils.wrapFaces(geoset.getFaces()), GL20.GL_STATIC_DRAW);
 		}
 	}

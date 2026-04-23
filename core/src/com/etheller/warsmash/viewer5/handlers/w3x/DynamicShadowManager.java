@@ -1,6 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Application.ApplicationType;
 import com.badlogic.gdx.graphics.GL30;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
@@ -18,8 +19,20 @@ public class DynamicShadowManager {
 	private final Matrix4 depthMVP = new Matrix4();
 	private final Matrix4 biasMatrix = new Matrix4();
 	private final Matrix4 depthBiasMVP = new Matrix4();
+	private boolean enabled;
 
 	public boolean setup(final WebGL webGL) {
+		this.depthBiasMVP.idt();
+		if ((Gdx.app != null) && (Gdx.app.getType() == ApplicationType.WebGL)) {
+			// The desktop-only depth framebuffer path is not WebGL-safe yet.
+			// Keep terrain rendering alive by disabling the dynamic shadow pass and
+			// returning an identity shadow matrix.
+			this.enabled = false;
+			this.framebufferName = 0;
+			this.depthTexture = 0;
+			return true;
+		}
+		this.enabled = true;
 		// The framebuffer, which regroups 0, 1, or more textures, and 0 or 1 depth
 		// buffer.
 		final GL30 gl = Gdx.gl30;
@@ -30,7 +43,7 @@ public class DynamicShadowManager {
 		this.depthTexture = gl.glGenTexture();
 		gl.glBindTexture(GL30.GL_TEXTURE_2D, this.depthTexture);
 		gl.glTexImage2D(GL30.GL_TEXTURE_2D, 0, GL30.GL_DEPTH_COMPONENT16, 1024, 1024, 0, GL30.GL_DEPTH_COMPONENT,
-				GL30.GL_FLOAT, null);
+				GL30.GL_UNSIGNED_SHORT, null);
 		gl.glTexParameteri(GL30.GL_TEXTURE_2D, GL30.GL_TEXTURE_MAG_FILTER, GL30.GL_NEAREST);
 		gl.glTexParameteri(GL30.GL_TEXTURE_2D, GL30.GL_TEXTURE_MIN_FILTER, GL30.GL_NEAREST);
 		gl.glTexParameteri(GL30.GL_TEXTURE_2D, GL30.GL_TEXTURE_WRAP_S, GL30.GL_CLAMP_TO_EDGE);
@@ -53,6 +66,9 @@ public class DynamicShadowManager {
 	 * @return
 	 */
 	public Matrix4 prepareShadowMatrix() {
+		if (!this.enabled) {
+			return this.depthMVP.idt();
+		}
 		final Vector3 lightInvDir = this.shadowVector;
 		lightInvDir.set(500f, 2000, 2000);
 
@@ -87,6 +103,9 @@ public class DynamicShadowManager {
 	}
 
 	public void beginShadowMap(final WebGL webGL) {
+		if (!this.enabled) {
+			return;
+		}
 		IS_SHADOW_MAPPING = true;
 
 		Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.framebufferName);
@@ -104,8 +123,15 @@ public class DynamicShadowManager {
 
 	// Don't forget to change viewport back
 	public void endShadowMap() {
+		if (!this.enabled) {
+			return;
+		}
 		IS_SHADOW_MAPPING = false;
 		Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+	}
+
+	public boolean isEnabled() {
+		return this.enabled;
 	}
 
 	public int getDepthTexture() {

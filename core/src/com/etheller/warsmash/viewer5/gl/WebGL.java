@@ -3,6 +3,8 @@ package com.etheller.warsmash.viewer5.gl;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.badlogic.gdx.Application.ApplicationType;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
@@ -56,8 +58,14 @@ public class WebGL {
 	}
 
 	public ShaderProgram createShaderProgram(String vertexSrc, String fragmentSrc) {
-		vertexSrc = vertexSrc.replace("mediump", "");
-		fragmentSrc = fragmentSrc.replace("mediump", "");
+		if (isWebEnvironment()) {
+			vertexSrc = adaptWebShaderSource(vertexSrc, false);
+			fragmentSrc = adaptWebShaderSource(fragmentSrc, true);
+		}
+		else {
+			vertexSrc = stripPrecisionQualifiersForDesktop(vertexSrc);
+			fragmentSrc = stripPrecisionQualifiersForDesktop(fragmentSrc);
+		}
 		final Map<Integer, ShaderProgram> shaderPrograms = this.shaderPrograms;
 
 		final int hash = stringHash(vertexSrc + fragmentSrc);
@@ -80,19 +88,22 @@ public class WebGL {
 		return null;
 	}
 
-	public void enableVertexAttribs(final int start, final int end) {
-		final GL20 gl = this.gl;
-
-		for (int i = start; i < end; i++) {
-			gl.glEnableVertexAttribArray(i);
+	private void setVertexAttribsEnabled(final ShaderProgram shaderProgram, final boolean enabled) {
+		if (shaderProgram == null) {
+			return;
 		}
-	}
-
-	public void disableVertexAttribs(final int start, final int end) {
 		final GL20 gl = this.gl;
-
-		for (int i = start; i < end; i++) {
-			gl.glDisableVertexAttribArray(i);
+		for (final String attributeName : shaderProgram.getAttributes()) {
+			final int location = shaderProgram.getAttributeLocation(attributeName);
+			if (location < 0) {
+				continue;
+			}
+			if (enabled) {
+				gl.glEnableVertexAttribArray(location);
+			}
+			else {
+				gl.glDisableVertexAttribArray(location);
+			}
 		}
 	}
 
@@ -100,38 +111,19 @@ public class WebGL {
 		final ShaderProgram currentShaderProgram = this.currentShaderProgram;
 
 		if ((shaderProgram != null) && shaderProgram.isCompiled() && (shaderProgram != currentShaderProgram)) {
-			int oldAttribs = 0;
-			final int newAttribs = shaderProgram.getAttributes().length;
-
 			if (currentShaderProgram != null) {
-				oldAttribs = currentShaderProgram.getAttributes().length;
+				setVertexAttribsEnabled(currentShaderProgram, false);
 			}
 
 			shaderProgram.begin();
-
-			if (newAttribs > oldAttribs) {
-				this.enableVertexAttribs(oldAttribs, newAttribs);
-			}
-			else if (newAttribs < oldAttribs) {
-				this.disableVertexAttribs(newAttribs, oldAttribs);
-			}
+			setVertexAttribsEnabled(shaderProgram, true);
 
 			this.currentShaderProgram = shaderProgram;
 		}
 		else if (shaderProgram == null) {
-			int oldAttribs = 0;
-			final int newAttribs = 0;
-
 			if (currentShaderProgram != null) {
-				oldAttribs = currentShaderProgram.getAttributes().length;
+				setVertexAttribsEnabled(currentShaderProgram, false);
 				currentShaderProgram.end();
-			}
-
-			if (newAttribs > oldAttribs) {
-				this.enableVertexAttribs(oldAttribs, newAttribs);
-			}
-			else if (newAttribs < oldAttribs) {
-				this.disableVertexAttribs(newAttribs, oldAttribs);
 			}
 
 			this.currentShaderProgram = shaderProgram;
@@ -164,5 +156,64 @@ public class WebGL {
 
 	private int stringHash(final String src) {
 		return src.hashCode();
+	}
+
+	private static boolean isWebEnvironment() {
+		return (Gdx.app != null) && (Gdx.app.getType() == ApplicationType.WebGL);
+	}
+
+	private static String adaptWebShaderSource(String shaderSrc, final boolean fragmentShader) {
+		if (shaderSrc.startsWith("#version 330 core")) {
+			shaderSrc = shaderSrc.replaceFirst("#version 330 core", "#version 300 es");
+			shaderSrc = shaderSrc.replace("texture2D(", "texture(");
+		}
+
+		if (!containsFloatPrecision(shaderSrc)) {
+			final boolean glsl300es = shaderSrc.startsWith("#version 300 es");
+			final String precisionBlock;
+			if (glsl300es) {
+				precisionBlock = "precision mediump float;\n" + //
+						"precision mediump int;\n" + //
+						"precision mediump sampler2D;\n" + //
+						"precision mediump samplerCube;\n" + //
+						"precision highp sampler2DArray;\n" + //
+						"precision highp usampler2D;\n" + //
+						"precision highp usampler2DArray;\n" + //
+						"precision highp isampler2D;\n" + //
+						"precision highp isampler2DArray;\n";
+			}
+			else {
+				precisionBlock = "precision mediump float;\n" + //
+						"precision mediump int;\n" + //
+						"precision mediump sampler2D;\n" + //
+						"precision mediump samplerCube;\n";
+			}
+			if (glsl300es) {
+				shaderSrc = shaderSrc.replaceFirst("#version 300 es\\s*", "#version 300 es\n" + precisionBlock);
+			}
+			else {
+				shaderSrc = precisionBlock + shaderSrc;
+			}
+		}
+
+		return shaderSrc;
+	}
+
+	private static boolean containsFloatPrecision(final String shaderSrc) {
+		return shaderSrc.contains("precision lowp float;") || shaderSrc.contains("precision mediump float;")
+				|| shaderSrc.contains("precision highp float;");
+	}
+
+	private static String stripPrecisionQualifiersForDesktop(String shaderSrc) {
+		shaderSrc = shaderSrc.replace("precision lowp float;\r\n", "");
+		shaderSrc = shaderSrc.replace("precision mediump float;\r\n", "");
+		shaderSrc = shaderSrc.replace("precision highp float;\r\n", "");
+		shaderSrc = shaderSrc.replace("precision lowp int;\r\n", "");
+		shaderSrc = shaderSrc.replace("precision mediump int;\r\n", "");
+		shaderSrc = shaderSrc.replace("precision highp int;\r\n", "");
+		shaderSrc = shaderSrc.replace("lowp ", "");
+		shaderSrc = shaderSrc.replace("mediump ", "");
+		shaderSrc = shaderSrc.replace("highp ", "");
+		return shaderSrc;
 	}
 }

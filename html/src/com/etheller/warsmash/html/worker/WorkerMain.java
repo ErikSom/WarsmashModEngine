@@ -32,6 +32,8 @@ public final class WorkerMain {
 
 	/** How often to post a progress message during extraction. */
 	private static final int PROGRESS_EVERY = 500;
+	private static final int MAP_PROGRESS_EVERY = 25;
+	private static final String MAPS_ROOT = "Maps/";
 
 	private WorkerMain() {
 	}
@@ -86,6 +88,14 @@ public final class WorkerMain {
 						+ t.getMessage());
 				t.printStackTrace();
 			}
+		}
+
+		try {
+			totalExtracted += copyBuiltinMaps();
+		}
+		catch (final Throwable t) {
+			postMessage("worker: map-copy error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+			t.printStackTrace();
 		}
 
 		try {
@@ -160,6 +170,46 @@ public final class WorkerMain {
 		final byte[] out = new byte[dup.remaining()];
 		dup.get(out);
 		return out;
+	}
+
+	private static int copyBuiltinMaps() throws Exception {
+		final String[] uploadedPaths = OpfsBridge.listUnder(MAPS_ROOT);
+		if (uploadedPaths.length == 0) {
+			postMessage("worker: no builtin maps found under " + MAPS_ROOT);
+			return 0;
+		}
+		int copied = 0;
+		int considered = 0;
+		for (final String path : uploadedPaths) {
+			if (!isBuiltinMap(path)) {
+				continue;
+			}
+			considered++;
+			try {
+				OpfsBridge.writeExtracted(path, OpfsBridge.readFull(path));
+				copied++;
+			}
+			catch (final Throwable t) {
+				postMessage("worker:   map copy failed for " + path + ": " + t.getMessage());
+			}
+			if ((considered % MAP_PROGRESS_EVERY) == 0) {
+				postMessage("worker:   copied maps " + copied + "/" + considered);
+			}
+		}
+		postMessage("worker: copied builtin maps " + copied + "/" + considered);
+		return copied;
+	}
+
+	private static boolean isBuiltinMap(final String path) {
+		final String normalized = path.replace('\\', '/');
+		final String lower = normalized.toLowerCase(Locale.ROOT);
+		if (!lower.startsWith("maps/")) {
+			return false;
+		}
+		if (lower.startsWith("maps/download/")) {
+			return false;
+		}
+		return lower.endsWith(".w3m") || lower.endsWith(".w3x");
 	}
 
 	private static String findByName(final String[] candidates, final String nameWanted) {

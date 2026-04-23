@@ -3,14 +3,13 @@ package com.etheller.warsmash.datasources;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -43,21 +42,11 @@ public class MpqDataSource implements DataSource {
 
 	@Override
 	public InputStream getResourceAsStream(final String filepath) throws IOException {
-		ArchivedFile file = null;
-		try {
-			file = this.archive.lookupHash2(new HashLookup(filepath));
+		final ByteBuffer buffer = read(filepath);
+		if (buffer == null) {
+			return null;
 		}
-		catch (final MPQException exc) {
-			if (exc.getMessage().equals("lookup not found")) {
-				return null;
-			}
-			else {
-				throw new IOException(exc);
-			}
-		}
-		final ArchivedFileStream stream = new ArchivedFileStream(this.inputChannel, this.extractor, file);
-		final InputStream newInputStream = Channels.newInputStream(stream);
-		return newInputStream;
+		return new ByteArrayInputStream(copyToByteArray(buffer));
 	}
 
 	@Override
@@ -99,8 +88,6 @@ public class MpqDataSource implements DataSource {
 				throw new IOException(exc);
 			}
 		}
-		final ArchivedFileStream stream = new ArchivedFileStream(this.inputChannel, this.extractor, file);
-		final InputStream newInputStream = Channels.newInputStream(stream);
 		String tmpdir = System.getProperty("java.io.tmpdir");
 		if (!tmpdir.endsWith(File.separator)) {
 			tmpdir += File.separator;
@@ -109,7 +96,9 @@ public class MpqDataSource implements DataSource {
 		final File tempProduct = new File(tempDir + filepath.replace('\\', File.separatorChar));
 		tempProduct.delete();
 		tempProduct.getParentFile().mkdirs();
-		Files.copy(newInputStream, tempProduct.toPath());
+		try (FileOutputStream outputStream = new FileOutputStream(tempProduct)) {
+			outputStream.write(copyToByteArray(read(filepath)));
+		}
 		tempProduct.deleteOnExit();
 		return tempProduct;
 	}
@@ -179,6 +168,14 @@ public class MpqDataSource implements DataSource {
 	@Override
 	public void close() throws IOException {
 		this.inputChannel.close();
+	}
+
+	private static byte[] copyToByteArray(final ByteBuffer buffer) {
+		final ByteBuffer duplicate = buffer.duplicate();
+		duplicate.position(0);
+		final byte[] out = new byte[duplicate.remaining()];
+		duplicate.get(out);
+		return out;
 	}
 
 }

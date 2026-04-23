@@ -1,6 +1,8 @@
 package com.etheller.warsmash.parsers.fdf;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStreams;
@@ -23,8 +25,8 @@ public class DataSourceFDFParserBuilder implements FDFParserBuilder {
 	@Override
 	public FDFParser build(final String path) {
 		FDFLexer lexer;
-		try {
-			lexer = new FDFLexer(CharStreams.fromStream(this.dataSource.getResourceAsStream(path)));
+		try (InputStream stream = this.dataSource.getResourceAsStream(path)) {
+			lexer = new FDFLexer(CharStreams.fromString(readString(stream)));
 		}
 		catch (final IOException e) {
 			throw new RuntimeException(e);
@@ -44,5 +46,15 @@ public class DataSourceFDFParserBuilder implements FDFParserBuilder {
 		};
 		fdfParser.addErrorListener(errorListener);
 		return fdfParser;
+	}
+
+	private static String readString(final InputStream stream) throws IOException {
+		final StringBuilder builder = new StringBuilder();
+		final byte[] buffer = new byte[4096];
+		int read;
+		while ((read = stream.read(buffer)) != -1) {
+			builder.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+		}
+		return builder.toString();
 	}
 }

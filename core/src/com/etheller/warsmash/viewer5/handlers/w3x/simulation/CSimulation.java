@@ -1,7 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation;
 
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -26,6 +24,7 @@ import com.etheller.interpreter.ast.scope.variableevent.VariableEvent;
 import com.etheller.warsmash.parsers.jass.scope.CommonTriggerExecutionScope;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.ObjectData;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
@@ -58,6 +57,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.data.CItemData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.data.CUnitData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.data.CUpgradeData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.pathing.CPathfindingProcessor;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.pathing.PathingPoint;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
@@ -290,7 +290,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	}
 
 	public CUnit internalCreateUnit(final War3ID typeId, final int playerIndex, final float x, final float y,
-			final float facing, final BufferedImage buildingPathingPixelMap) {
+			final float facing, final RgbaImage buildingPathingPixelMap) {
 		final CUnit unit = this.unitData.create(this, playerIndex, typeId, x, y, facing, buildingPathingPixelMap,
 				this.handleIdAllocator);
 		this.newUnits.add(unit);
@@ -481,7 +481,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 
 	public void findNaiveSlowPath(final CUnit ignoreIntersectionsWithThisUnit,
 			final CUnit ignoreIntersectionsWithThisSecondUnit, final float startX, final float startY,
-			final Point2D.Float goal, final PathingGrid.MovementType movementType, final float collisionSize,
+			final PathingPoint goal, final PathingGrid.MovementType movementType, final float collisionSize,
 			final boolean allowSmoothing, final CBehaviorMove queueItem) {
 		final int playerIndex = queueItem.getUnit().getPlayerIndex();
 		this.pathfindingProcessors[playerIndex].findNaiveSlowPath(ignoreIntersectionsWithThisUnit,
@@ -585,16 +585,20 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		checkTimeOfDayEvents(timeOfDayBefore, timeOfDayAfter);
 		this.onTickTriggers.addAll(this.addedOnTickTriggers);
 		this.addedOnTickTriggers.clear();
-		for (final Trigger trigger : this.onTickTriggers) {
-			final TriggerExecutionScope triggerScope = trigger.getTriggerExecutionScope();
-			if (trigger.evaluate(this.globalScope, triggerScope)) {
-				trigger.execute(this.globalScope, triggerScope);
+		if (this.globalScope != null) {
+			for (final Trigger trigger : this.onTickTriggers) {
+				final TriggerExecutionScope triggerScope = trigger.getTriggerExecutionScope();
+				if (trigger.evaluate(this.globalScope, triggerScope)) {
+					trigger.execute(this.globalScope, triggerScope);
+				}
 			}
 		}
 		this.onTickTriggers.removeAll(this.removedOnTickTriggers);
 		this.removedOnTickTriggers.clear();
 
-		this.globalScope.runThreads();
+		if (this.globalScope != null) {
+			this.globalScope.runThreads();
+		}
 
 		this.runningPostUpdateCallbacks.clear();
 		this.runningPostUpdateCallbacks.addAll(this.postUpdateCallbacks);
@@ -1117,7 +1121,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		this.unitData.addDefaultAbilitiesToUnit(this, this.handleIdAllocator, unitTypeInstance, true, manaInitial,
 				speed, unit);
 		this.unitData.applyPlayerUpgradesToUnit(this, unit.getPlayerIndex(), unitTypeInstance, unit);
-		final BufferedImage buildingPathingPixelMap = unitTypeInstance.getBuildingPathingPixelMap();
+		final RgbaImage buildingPathingPixelMap = unitTypeInstance.getBuildingPathingPixelMap();
 		if (buildingPathingPixelMap != null) {
 			unit.regeneratePathingInstance(this, buildingPathingPixelMap);
 		}

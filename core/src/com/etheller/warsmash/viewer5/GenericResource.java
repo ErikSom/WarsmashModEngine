@@ -1,7 +1,5 @@
 package com.etheller.warsmash.viewer5;
 
-import java.io.InputStream;
-
 import com.etheller.warsmash.common.LoadGenericCallback;
 
 public final class GenericResource extends Resource {
@@ -22,8 +20,8 @@ public final class GenericResource extends Resource {
 	}
 
 	@Override
-	protected void load(final InputStream src, final Object options) {
-		this.data = this.callback.call(src);
+	protected void load(final Object src, final Object options) {
+		this.data = this.callback.call((java.io.InputStream) src);
 
 	}
 

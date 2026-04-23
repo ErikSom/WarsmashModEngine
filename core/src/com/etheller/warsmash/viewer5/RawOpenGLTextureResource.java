@@ -111,6 +111,30 @@ public abstract class RawOpenGLTextureResource extends Texture {
 	}
 
 	/**
+	 * Upload raw RGBA8888 pixels directly, bypassing {@link Pixmap}. Needed on the
+	 * web/TeaVM backend because {@code new Pixmap(w, h, RGBA8888)} followed by
+	 * {@code pixmap.getPixels().put(bytes)} does not round-trip — the resulting
+	 * Pixmap reports the right dimensions but the pixel buffer stays zeroed, so
+	 * GL uploads all-black textures. Callers that already have the bytes (e.g.
+	 * {@link com.etheller.warsmash.util.RgbaImage}) should use this path directly.
+	 */
+	public void updateFromRgba(final ByteBuffer rgbaPixels, final int width, final int height, final boolean sRGBFix) {
+		rgbaPixels.position(0);
+		rgbaPixels.limit(rgbaPixels.capacity());
+		this.data = rgbaPixels;
+
+		final GL20 gl = this.viewer.gl;
+		gl.glBindTexture(GL20.GL_TEXTURE_2D, this.handle);
+		gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0,
+				sRGBFix ? GL30.GL_SRGB8_ALPHA8 : GL30.GL_RGBA8,
+				width, height,
+				0, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, rgbaPixels);
+
+		this.width = width;
+		this.height = height;
+	}
+
+	/**
 	 * I really don't like holding the reference to the original buffer like this.
 	 * Seems wasteful. It's already on the GPU. However, while porting some code for
 	 * shadow maps I hit a point where I really finally felt obligated to add this

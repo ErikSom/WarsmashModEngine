@@ -257,11 +257,12 @@ public class Jass2 {
 	public static final boolean REPORT_SYNTAX_ERRORS = true;
 
 	public static CommonEnvironment loadCommon(final DataSource dataSource, final Viewport uiViewport,
-			final Scene uiScene, final War3MapViewer war3MapViewer, final WarsmashUI meleeUI, final String... files) {
+			final Scene uiScene, final War3MapViewer war3MapViewer, final GameUI gameUI,
+			final WarsmashUI meleeUI, final String... files) {
 
 		final JassProgram jassProgramVisitor = new JassProgram();
 		final CommonEnvironment environment = new CommonEnvironment(jassProgramVisitor, dataSource, uiViewport, uiScene,
-				war3MapViewer, meleeUI, files);
+				war3MapViewer, gameUI, meleeUI, files);
 		for (final String file : files) {
 			String jassFilePath = file;
 			if (!dataSource.has(jassFilePath)) {
@@ -573,9 +574,10 @@ public class Jass2 {
 
 		private CommonEnvironment(final JassProgram jassProgramVisitor, final DataSource dataSource,
 				final Viewport uiViewport, final Scene uiScene, final War3MapViewer war3MapViewer,
+				final GameUI gameUI,
 				final WarsmashUI meleeUI, final String[] originalFiles) {
 			this.jassProgramVisitor = jassProgramVisitor;
-			this.gameUI = war3MapViewer.getGameUI();
+			this.gameUI = gameUI;
 			final Rectangle tempRect = new Rectangle();
 			this.simulation = war3MapViewer.simulation;
 			final GlobalScope globals = jassProgramVisitor.getGlobalScope();
@@ -797,7 +799,7 @@ public class Jass2 {
 						return whichWidget == null ? JassType.STRING.getNullValue()
 								: new StringJassValue(whichWidget.getUnitType().getName());
 					});
-			registerConversionAndStringNatives(jassProgramVisitor, war3MapViewer.getGameUI());
+			registerConversionAndStringNatives(jassProgramVisitor, gameUI);
 			final War3MapConfig mapConfig = war3MapViewer.getMapConfig();
 			registerConfigNatives(jassProgramVisitor, mapConfig, startlocprioType, gametypeType, placementType,
 					gamespeedType, gamedifficultyType, mapdensityType, locationType, playerType, playercolorType,
@@ -2444,7 +2446,7 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final TextTag textTag = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
 						String textValue = nullable(arguments, 1, StringJassValueVisitor.getInstance());
-						textValue = war3MapViewer.getGameUI().getTrigStr(textValue);
+						textValue = gameUI.getTrigStr(textValue);
 						final float height = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
 						if (textTag != null) {
 							textTag.setText(textValue);

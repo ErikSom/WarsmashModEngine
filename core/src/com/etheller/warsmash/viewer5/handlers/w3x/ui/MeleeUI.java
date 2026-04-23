@@ -1,6 +1,5 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayDeque;
@@ -67,6 +66,7 @@ import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.util.AwtImageUtils;
 import com.etheller.warsmash.util.FastNumberFormat;
 import com.etheller.warsmash.util.ImageUtils;
+import com.etheller.warsmash.util.RgbaImage;
 import com.etheller.warsmash.util.RenderMathUtils;
 import com.etheller.warsmash.util.StringBundle;
 import com.etheller.warsmash.util.War3ID;
@@ -330,7 +330,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	private RenderUnit activeCommandUnit;
 	private MdxComplexInstance cursorModelInstance = null;
 	private MdxComplexInstance rallyPointInstance = null;
-	private BufferedImage cursorModelPathing;
+	private RgbaImage cursorModelPathing;
 	private Pixmap cursorModelUnderneathPathingRedGreenPixmap;
 	private Texture cursorModelUnderneathPathingRedGreenPixmapTexture;
 	private PixmapTextureData cursorModelUnderneathPathingRedGreenPixmapTextureData;

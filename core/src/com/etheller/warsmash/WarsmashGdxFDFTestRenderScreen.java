@@ -864,7 +864,7 @@ public class WarsmashGdxFDFTestRenderScreen implements InputProcessor, Screen, S
 		}
 
 		@Override
-		protected void load(final InputStream src, final Object options) {
+		protected void load(final Object src, final Object options) {
 		}
 
 		@Override

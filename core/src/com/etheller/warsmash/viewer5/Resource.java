@@ -1,7 +1,5 @@
 package com.etheller.warsmash.viewer5;
 
-import java.io.InputStream;
-
 public abstract class Resource {
 	public final ModelViewer viewer;
 	public final String extension;
@@ -21,7 +19,7 @@ public abstract class Resource {
 		this.loaded = false;
 	}
 
-	public void loadData(final InputStream src, final Object options) {
+	public void loadData(final Object src, final Object options) {
 		this.loaded = true;
 
 		try {
@@ -40,7 +38,7 @@ public abstract class Resource {
 
 	protected abstract void lateLoad();
 
-	protected abstract void load(InputStream src, Object options);
+	protected abstract void load(Object src, Object options);
 
 	protected abstract void error(Exception e);
 }

@@ -629,7 +629,7 @@ public class MdxShaders {
 		return "\r\n" + //
 				"\r\n" + //
 				"    uniform mat4 u_mvp;\r\n" + //
-				"    uniform vec4 u_vertexColor;\r\n" + //
+				"    uniform mediump vec4 u_vertexColor;\r\n" + //
 				"    uniform vec4 u_geosetColor;\r\n" + //
 				"    uniform float u_layerAlpha;\r\n" + //
 				"    uniform vec2 u_uvTrans;\r\n" + //
@@ -661,20 +661,46 @@ public class MdxShaders {
 				"        mat4 bone;\r\n" + //
 				"        vec4 p = vec4(0.0,0.0,0.0,0.0);\r\n" + //
 				"        vec4 n = vec4(0.0,0.0,0.0,0.0);\r\n" + //
-				"        for (int i = 0; i < 4; i++) {\r\n" + //
-				"          if (a_bones[i] > 0.0) {\r\n" + //
-				"            bone = fetchMatrix(a_bones[i] - 1.0, 0.0);\r\n" + //
+				"        if (a_bones[0] > 0.0) {\r\n" + //
+				"          bone = fetchMatrix(a_bones[0] - 1.0, 0.0);\r\n" + //
+				"          p += bone * position4;\r\n" + //
+				"          n += bone * normal4;\r\n" + //
+				"        }\r\n" + //
+				"        if (a_bones[1] > 0.0) {\r\n" + //
+				"          bone = fetchMatrix(a_bones[1] - 1.0, 0.0);\r\n" + //
+				"          p += bone * position4;\r\n" + //
+				"          n += bone * normal4;\r\n" + //
+				"        }\r\n" + //
+				"        if (a_bones[2] > 0.0) {\r\n" + //
+				"          bone = fetchMatrix(a_bones[2] - 1.0, 0.0);\r\n" + //
+				"          p += bone * position4;\r\n" + //
+				"          n += bone * normal4;\r\n" + //
+				"        }\r\n" + //
+				"        if (a_bones[3] > 0.0) {\r\n" + //
+				"          bone = fetchMatrix(a_bones[3] - 1.0, 0.0);\r\n" + //
+				"          p += bone * position4;\r\n" + //
+				"          n += bone * normal4;\r\n" + //
+				"        }\r\n" + //
+				"        #ifdef EXTENDED_BONES\r\n" + //
+				"          if (a_extendedBones[0] > 0.0) {\r\n" + //
+				"            bone = fetchMatrix(a_extendedBones[0] - 1.0, 0.0);\r\n" + //
 				"            p += bone * position4;\r\n" + //
 				"            n += bone * normal4;\r\n" + //
 				"          }\r\n" + //
-				"        }\r\n" + //
-				"        #ifdef EXTENDED_BONES\r\n" + //
-				"          for (int i = 0; i < 4; i++) {\r\n" + //
-				"            if (a_extendedBones[i] > 0.0) {\r\n" + //
-				"              bone = fetchMatrix(a_extendedBones[i] - 1.0, 0.0);\r\n" + //
-				"              p += bone * position4;\r\n" + //
-				"              n += bone * normal4;\r\n" + //
-				"            }\r\n" + //
+				"          if (a_extendedBones[1] > 0.0) {\r\n" + //
+				"            bone = fetchMatrix(a_extendedBones[1] - 1.0, 0.0);\r\n" + //
+				"            p += bone * position4;\r\n" + //
+				"            n += bone * normal4;\r\n" + //
+				"          }\r\n" + //
+				"          if (a_extendedBones[2] > 0.0) {\r\n" + //
+				"            bone = fetchMatrix(a_extendedBones[2] - 1.0, 0.0);\r\n" + //
+				"            p += bone * position4;\r\n" + //
+				"            n += bone * normal4;\r\n" + //
+				"          }\r\n" + //
+				"          if (a_extendedBones[3] > 0.0) {\r\n" + //
+				"            bone = fetchMatrix(a_extendedBones[3] - 1.0, 0.0);\r\n" + //
+				"            p += bone * position4;\r\n" + //
+				"            n += bone * normal4;\r\n" + //
 				"          }\r\n" + //
 				"        #endif\r\n" + //
 				"        position = p.xyz / a_boneNumber;\r\n" + //
@@ -704,9 +730,11 @@ public class MdxShaders {
 				"    }";
 	}
 
-	public static final String fsComplex = Shaders.quatTransform + "\r\n\r\n" + //
+	public static final String fsComplex = "\r\n" + //
+			"    precision mediump float;\r\n" + //
+			Shaders.quatTransform + "\r\n\r\n" + //
 			"    uniform sampler2D u_texture;\r\n" + //
-			"    uniform vec4 u_vertexColor;\r\n" + //
+			"    uniform mediump vec4 u_vertexColor;\r\n" + //
 			"    uniform float u_filterMode;\r\n" + //
 			"    uniform bool u_unfogged;\r\n" + //
 			"    uniform vec4 u_fogColor;\r\n" + //
@@ -737,7 +765,8 @@ public class MdxShaders {
 			"      gl_FragColor = color;\r\n" + //
 			"    }";
 
-	public static final String fsComplexShadowMap = "\r\n\r\n" + //
+	public static final String fsComplexShadowMap = "\r\n" + //
+			"    precision mediump float;\r\n" + //
 			Shaders.quatTransform + "\r\n\r\n" + //
 			"    uniform sampler2D u_texture;\r\n" + //
 			"    uniform float u_filterMode;\r\n" + //
@@ -894,7 +923,17 @@ public class MdxShaders {
 				"          vertices[2] = u_vertices[2];\r\n" + //
 				"          vertices[3] = u_vertices[3];\r\n" + //
 				"        }\r\n" + //
-				"        position =  a_p0 + (vertices[int(a_position)] * scale);\r\n" + //
+				"        vec3 vertexOffset;\r\n" + //
+				"        if (a_position == 0.0) {\r\n" + //
+				"          vertexOffset = vertices[0];\r\n" + //
+				"        } else if (a_position == 1.0) {\r\n" + //
+				"          vertexOffset = vertices[1];\r\n" + //
+				"        } else if (a_position == 2.0) {\r\n" + //
+				"          vertexOffset = vertices[2];\r\n" + //
+				"        } else {\r\n" + //
+				"          vertexOffset = vertices[3];\r\n" + //
+				"        }\r\n" + //
+				"        position = a_p0 + (vertexOffset * scale);\r\n" + //
 				"        gl_Position = u_mvp * vec4(position, 1.0);\r\n" + //
 				"      } else {\r\n" + //
 				"        // Get the normal to the tail in camera space.\r\n" + //
@@ -1028,6 +1067,7 @@ public class MdxShaders {
 
 	public static final String fsParticles = "\r\n" + //
 			"    #define EMITTER_RIBBON 1.0\r\n" + //
+			"    precision mediump float;\r\n" + //
 			"    uniform sampler2D u_texture;\r\n" + //
 			"    uniform mediump float u_emitter;\r\n" + //
 			"    uniform float u_filterMode;\r\n" + //
@@ -1065,7 +1105,7 @@ public class MdxShaders {
 			"    }\r\n";
 
 	public static final String fsLightning = "\r\n" + //
-	// " precision mediump float;\r\n" + //
+			"    precision mediump float;\r\n" + //
 			"    uniform sampler2D u_texture;\r\n" + //
 			"    varying vec2 v_uv;\r\n" + //
 			"    varying vec4 v_color;\r\n" + //

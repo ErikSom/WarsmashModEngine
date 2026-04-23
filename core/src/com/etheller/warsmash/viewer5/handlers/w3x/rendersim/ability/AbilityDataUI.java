@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.badlogic.gdx.graphics.Texture;
-import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.parsers.w3x.objectdata.Warcraft3MapRuntimeObjectData;
+import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.units.GameObject;
 import com.etheller.warsmash.units.ObjectData;
@@ -21,6 +21,16 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.COrderBut
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbilityFields;
 
 public class AbilityDataUI {
+	public interface SkinResolver {
+		String getSkinField(String file);
+
+		String trySkinField(String file);
+
+		Texture loadTexture(String path);
+
+		DataTable getSkinData();
+	}
+
 	// Standard ability icon fields
 	private static final String ICON_NORMAL_XY = "Buttonpos"; // replaced from 'abpx'
 	private static final String ICON_NORMAL = "Art"; // replaced from 'aart'
@@ -125,19 +135,19 @@ public class AbilityDataUI {
 	private final String disabledPrefix;
 	private final Map<COrderButton, OrderButtonUI> buttonToRenderPeer = new HashMap<>();
 
-	public AbilityDataUI(final Warcraft3MapRuntimeObjectData allObjectData, final GameUI gameUI,
+	public AbilityDataUI(final Warcraft3MapRuntimeObjectData allObjectData, final SkinResolver skinResolver,
 			final War3MapViewer viewer) {
 		final ObjectData abilityData = allObjectData.getAbilities();
 		final ObjectData buffData = allObjectData.getBuffs();
 		final ObjectData unitData = allObjectData.getUnits();
 		final ObjectData itemData = allObjectData.getItems();
 		final ObjectData upgradeData = allObjectData.getUpgrades();
-		this.disabledPrefix = gameUI.getSkinField("CommandButtonDisabledArtPath");
+		this.disabledPrefix = skinResolver.getSkinField("CommandButtonDisabledArtPath");
 		for (final String alias : abilityData.keySet()) {
 			final GameObject abilityTypeData = abilityData.get(alias);
-			final String iconResearchPath = gameUI.trySkinField(abilityTypeData.getFieldAsString(ICON_RESEARCH, 0));
-			final String iconNormalPath = gameUI.trySkinField(abilityTypeData.getFieldAsString(ICON_NORMAL, 0));
-			final String iconTurnOffPath = gameUI.trySkinField(abilityTypeData.getFieldAsString(ICON_TURN_OFF, 0));
+			final String iconResearchPath = skinResolver.trySkinField(abilityTypeData.getFieldAsString(ICON_RESEARCH, 0));
+			final String iconNormalPath = skinResolver.trySkinField(abilityTypeData.getFieldAsString(ICON_NORMAL, 0));
+			final String iconTurnOffPath = skinResolver.trySkinField(abilityTypeData.getFieldAsString(ICON_TURN_OFF, 0));
 			final char iconHotkey = getHotkey(abilityTypeData, ABILITY_HOTKEY_NORMAL);
 			final char iconTurnOffHotkey = getHotkey(abilityTypeData, ABILITY_HOTKEY_TURNOFF);
 			final String iconResearchTip = abilityTypeData.getFieldAsString(ABILITY_RESEARCH_TIP, 0);
@@ -150,12 +160,12 @@ public class AbilityDataUI {
 			final int iconNormalY = abilityTypeData.getFieldAsInteger(ICON_NORMAL_XY, 1);
 			final int iconTurnOffX = abilityTypeData.getFieldAsInteger(ICON_TURN_OFF_XY, 0);
 			final int iconTurnOffY = abilityTypeData.getFieldAsInteger(ICON_TURN_OFF_XY, 1);
-			final Texture iconResearch = gameUI.loadTexture(iconResearchPath);
-			final Texture iconResearchDisabled = gameUI.loadTexture(disable(iconResearchPath, this.disabledPrefix));
-			final Texture iconNormal = gameUI.loadTexture(iconNormalPath);
-			final Texture iconNormalDisabled = gameUI.loadTexture(disable(iconNormalPath, this.disabledPrefix));
-			final Texture iconTurnOff = gameUI.loadTexture(iconTurnOffPath);
-			final Texture iconTurnOffDisabled = gameUI.loadTexture(disable(iconTurnOffPath, this.disabledPrefix));
+			final Texture iconResearch = skinResolver.loadTexture(iconResearchPath);
+			final Texture iconResearchDisabled = skinResolver.loadTexture(disable(iconResearchPath, this.disabledPrefix));
+			final Texture iconNormal = skinResolver.loadTexture(iconNormalPath);
+			final Texture iconNormalDisabled = skinResolver.loadTexture(disable(iconNormalPath, this.disabledPrefix));
+			final Texture iconTurnOff = skinResolver.loadTexture(iconTurnOffPath);
+			final Texture iconTurnOffDisabled = skinResolver.loadTexture(disable(iconTurnOffPath, this.disabledPrefix));
 
 			final List<IconUI> turnOffIconUIs = new ArrayList<>();
 			final List<IconUI> normalIconUIs = new ArrayList<>();
@@ -259,12 +269,12 @@ public class AbilityDataUI {
 			// table, but I was already using an object editor tab emulator that I wrote
 			// previously and so it has these divided...
 			final GameObject abilityTypeData = buffData.get(alias);
-			final String iconNormalPath = gameUI.trySkinField(abilityTypeData.getFieldAsString(BUFF_ICON_NORMAL, 0));
+			final String iconNormalPath = skinResolver.trySkinField(abilityTypeData.getFieldAsString(BUFF_ICON_NORMAL, 0));
 			final String iconTip = abilityTypeData.getFieldAsString(BUFF_ABILITY_TIP, 0);
 			final String iconUberTip = parseUbertip(allObjectData,
 					abilityTypeData.getFieldAsString(BUFF_ABILITY_UBER_TIP, 0));
-			final Texture iconNormal = gameUI.loadTexture(iconNormalPath);
-			final Texture iconNormalDisabled = gameUI.loadTexture(disable(iconNormalPath, this.disabledPrefix));
+			final Texture iconNormal = skinResolver.loadTexture(iconNormalPath);
+			final Texture iconNormalDisabled = skinResolver.loadTexture(disable(iconNormalPath, this.disabledPrefix));
 
 			final List<EffectAttachmentUI> targetArt = new ArrayList<>();
 			final List<String> targetArtPaths = abilityTypeData.getFieldAsList(BUFF_TARGET_ART);
@@ -316,7 +326,7 @@ public class AbilityDataUI {
 		}
 		for (final String alias : unitData.keySet()) {
 			final GameObject abilityTypeData = unitData.get(alias);
-			final String iconNormalPath = gameUI.trySkinField(abilityTypeData.getFieldAsString(UNIT_ICON_NORMAL, 0));
+			final String iconNormalPath = skinResolver.trySkinField(abilityTypeData.getFieldAsString(UNIT_ICON_NORMAL, 0));
 			final int iconNormalX = abilityTypeData.getFieldAsInteger(UNIT_ICON_NORMAL_XY, 0);
 			final int iconNormalY = abilityTypeData.getFieldAsInteger(UNIT_ICON_NORMAL_XY, 1);
 			final String iconTip = abilityTypeData.getFieldAsString(UNIT_TIP, 0);
@@ -324,22 +334,22 @@ public class AbilityDataUI {
 			final String awakenTip = abilityTypeData.getFieldAsString(UNIT_AWAKEN_TIP, 0);
 			final String iconUberTip = parseUbertip(allObjectData, abilityTypeData.getFieldAsString(UNIT_UBER_TIP, 0));
 			final char iconHotkey = getHotkey(abilityTypeData, UNIT_HOTKEY);
-			final Texture iconNormal = gameUI.loadTexture(iconNormalPath);
-			final Texture iconNormalDisabled = gameUI.loadTexture(disable(iconNormalPath, this.disabledPrefix));
+			final Texture iconNormal = skinResolver.loadTexture(iconNormalPath);
+			final Texture iconNormalDisabled = skinResolver.loadTexture(disable(iconNormalPath, this.disabledPrefix));
 			this.rawcodeToUnitUI.put(War3ID.fromString(alias), new UnitIconUI(iconNormal, iconNormalDisabled,
 					iconNormalX, iconNormalY, iconTip, iconUberTip, iconHotkey, reviveTip, awakenTip));
 		}
 		for (final String alias : itemData.keySet()) {
 			final GameObject abilityTypeData = itemData.get(alias);
-			final String iconNormalPath = gameUI.trySkinField(abilityTypeData.getFieldAsString(ITEM_ICON_NORMAL, 0));
+			final String iconNormalPath = skinResolver.trySkinField(abilityTypeData.getFieldAsString(ITEM_ICON_NORMAL, 0));
 			final int iconNormalX = abilityTypeData.getFieldAsInteger(ITEM_ICON_NORMAL_XY, 0);
 			final int iconNormalY = abilityTypeData.getFieldAsInteger(ITEM_ICON_NORMAL_XY, 1);
 			final String iconTip = abilityTypeData.getFieldAsString(ITEM_TIP, 0);
 			final String iconUberTip = parseUbertip(allObjectData, abilityTypeData.getFieldAsString(ITEM_UBER_TIP, 0));
 			final String iconDescription = abilityTypeData.getFieldAsString(ITEM_DESCRIPTION, 0);
 			final char iconHotkey = getHotkey(abilityTypeData, ITEM_HOTKEY);
-			final Texture iconNormal = gameUI.loadTexture(iconNormalPath);
-			final Texture iconNormalDisabled = gameUI.loadTexture(disable(iconNormalPath, this.disabledPrefix));
+			final Texture iconNormal = skinResolver.loadTexture(iconNormalPath);
+			final Texture iconNormalDisabled = skinResolver.loadTexture(disable(iconNormalPath, this.disabledPrefix));
 			this.rawcodeToItemUI
 					.put(War3ID.fromString(alias),
 							new ItemUI(
@@ -357,34 +367,34 @@ public class AbilityDataUI {
 				final String iconTip = upgradeTypeData.getFieldAsString(UPGRADE_TIP, upgradeLevelValue);
 				final String iconUberTip = parseUbertip(allObjectData,
 						upgradeTypeData.getFieldAsString(UPGRADE_UBER_TIP, upgradeLevelValue));
-				final String iconNormalPath = gameUI
+				final String iconNormalPath = skinResolver
 						.trySkinField(upgradeTypeData.getFieldAsString(UPGRADE_ICON_NORMAL, upgradeLevelValue));
 				final char iconHotkey = getHotkey(upgradeTypeData, UPGRADE_HOTKEY, upgradeLevelValue);
-				final Texture iconNormal = gameUI.loadTexture(iconNormalPath);
-				final Texture iconNormalDisabled = gameUI.loadTexture(disable(iconNormalPath, this.disabledPrefix));
+				final Texture iconNormal = skinResolver.loadTexture(iconNormalPath);
+				final Texture iconNormalDisabled = skinResolver.loadTexture(disable(iconNormalPath, this.disabledPrefix));
 				upgradeIconsByLevel.add(new IconUI(iconNormal, iconNormalDisabled, iconNormalX, iconNormalY, iconTip,
 						iconUberTip, iconHotkey));
 			}
 			this.rawcodeToUpgradeUI.put(War3ID.fromString(alias), upgradeIconsByLevel);
 		}
-		this.moveUI = createBuiltInIconUI(gameUI, "CmdMove", this.disabledPrefix);
-		this.stopUI = createBuiltInIconUI(gameUI, "CmdStop", this.disabledPrefix);
-		this.holdPosUI = createBuiltInIconUI(gameUI, "CmdHoldPos", this.disabledPrefix);
-		this.patrolUI = createBuiltInIconUI(gameUI, "CmdPatrol", this.disabledPrefix);
-		this.attackUI = createBuiltInIconUI(gameUI, "CmdAttack", this.disabledPrefix);
-		this.buildHumanUI = createBuiltInIconUI(gameUI, "CmdBuildHuman", this.disabledPrefix);
-		this.buildOrcUI = createBuiltInIconUI(gameUI, "CmdBuildOrc", this.disabledPrefix);
-		this.buildNightElfUI = createBuiltInIconUI(gameUI, "CmdBuildNightElf", this.disabledPrefix);
-		this.buildUndeadUI = createBuiltInIconUI(gameUI, "CmdBuildUndead", this.disabledPrefix);
-		this.buildNagaUI = createBuiltInIconUISplit(gameUI, "CmdBuildNaga", "CmdBuildOrc",
+		this.moveUI = createBuiltInIconUI(skinResolver, "CmdMove", this.disabledPrefix);
+		this.stopUI = createBuiltInIconUI(skinResolver, "CmdStop", this.disabledPrefix);
+		this.holdPosUI = createBuiltInIconUI(skinResolver, "CmdHoldPos", this.disabledPrefix);
+		this.patrolUI = createBuiltInIconUI(skinResolver, "CmdPatrol", this.disabledPrefix);
+		this.attackUI = createBuiltInIconUI(skinResolver, "CmdAttack", this.disabledPrefix);
+		this.buildHumanUI = createBuiltInIconUI(skinResolver, "CmdBuildHuman", this.disabledPrefix);
+		this.buildOrcUI = createBuiltInIconUI(skinResolver, "CmdBuildOrc", this.disabledPrefix);
+		this.buildNightElfUI = createBuiltInIconUI(skinResolver, "CmdBuildNightElf", this.disabledPrefix);
+		this.buildUndeadUI = createBuiltInIconUI(skinResolver, "CmdBuildUndead", this.disabledPrefix);
+		this.buildNagaUI = createBuiltInIconUISplit(skinResolver, "CmdBuildNaga", "CmdBuildOrc",
 				abilityData.get(War3ID.fromString("AGbu")), this.disabledPrefix);
-		this.buildNeutralUI = createBuiltInIconUI(gameUI, "CmdBuild", this.disabledPrefix);
-		this.attackGroundUI = createBuiltInIconUI(gameUI, "CmdAttackGround", this.disabledPrefix);
-		this.cancelUI = createBuiltInIconUI(gameUI, "CmdCancel", this.disabledPrefix);
-		this.cancelBuildUI = createBuiltInIconUI(gameUI, "CmdCancelBuild", this.disabledPrefix);
-		this.cancelTrainUI = createBuiltInIconUI(gameUI, "CmdCancelTrain", this.disabledPrefix);
-		this.rallyUI = createBuiltInIconUI(gameUI, "CmdRally", this.disabledPrefix);
-		this.selectSkillUI = createBuiltInIconUI(gameUI, "CmdSelectSkill", this.disabledPrefix);
+		this.buildNeutralUI = createBuiltInIconUI(skinResolver, "CmdBuild", this.disabledPrefix);
+		this.attackGroundUI = createBuiltInIconUI(skinResolver, "CmdAttackGround", this.disabledPrefix);
+		this.cancelUI = createBuiltInIconUI(skinResolver, "CmdCancel", this.disabledPrefix);
+		this.cancelBuildUI = createBuiltInIconUI(skinResolver, "CmdCancelBuild", this.disabledPrefix);
+		this.cancelTrainUI = createBuiltInIconUI(skinResolver, "CmdCancelTrain", this.disabledPrefix);
+		this.rallyUI = createBuiltInIconUI(skinResolver, "CmdRally", this.disabledPrefix);
+		this.selectSkillUI = createBuiltInIconUI(skinResolver, "CmdSelectSkill", this.disabledPrefix);
 		this.neutralInteractUI = getUI(War3ID.fromString("Anei")).getOnIconUI(0);
 	}
 
@@ -442,11 +452,11 @@ public class AbilityDataUI {
 		return itemHotkey;
 	}
 
-	private IconUI createBuiltInIconUI(final GameUI gameUI, final String key, final String disabledPrefix) {
-		final Element builtInAbility = gameUI.getSkinData().get(key);
-		final String iconPath = gameUI.trySkinField(builtInAbility.getField("Art"));
-		final Texture icon = gameUI.loadTexture(iconPath);
-		final Texture iconDisabled = gameUI.loadTexture(disable(iconPath, disabledPrefix));
+	private IconUI createBuiltInIconUI(final SkinResolver skinResolver, final String key, final String disabledPrefix) {
+		final Element builtInAbility = skinResolver.getSkinData().get(key);
+		final String iconPath = skinResolver.trySkinField(builtInAbility.getField("Art"));
+		final Texture icon = skinResolver.loadTexture(iconPath);
+		final Texture iconDisabled = skinResolver.loadTexture(disable(iconPath, disabledPrefix));
 		final int buttonPositionX = builtInAbility.getFieldValue("Buttonpos", 0);
 		final int buttonPositionY = builtInAbility.getFieldValue("Buttonpos", 1);
 		final String tip = builtInAbility.getField("Tip");
@@ -456,17 +466,17 @@ public class AbilityDataUI {
 		return new IconUI(icon, iconDisabled, buttonPositionX, buttonPositionY, tip, uberTip, hotkey);
 	}
 
-	private IconUI createBuiltInIconUISplit(final GameUI gameUI, final String key, final String funckey,
+	private IconUI createBuiltInIconUISplit(final SkinResolver skinResolver, final String key, final String funckey,
 			final GameObject worldEditorObject, final String disabledPrefix) {
-		final Element builtInAbility = gameUI.getSkinData().get(key);
-		final Element builtInAbilityFunc = gameUI.getSkinData().get(funckey);
-		String iconPath = gameUI.trySkinField(builtInAbilityFunc.getField("Art"));
+		final Element builtInAbility = skinResolver.getSkinData().get(key);
+		final Element builtInAbilityFunc = skinResolver.getSkinData().get(funckey);
+		String iconPath = skinResolver.trySkinField(builtInAbilityFunc.getField("Art"));
 		final String worldEditorValue = worldEditorObject.getField("Art");
 		if (worldEditorValue.length() > 0) {
 			iconPath = worldEditorValue;
 		}
-		final Texture icon = gameUI.loadTexture(iconPath);
-		final Texture iconDisabled = gameUI.loadTexture(disable(iconPath, disabledPrefix));
+		final Texture icon = skinResolver.loadTexture(iconPath);
+		final Texture iconDisabled = skinResolver.loadTexture(disable(iconPath, disabledPrefix));
 		final int buttonPositionX = builtInAbilityFunc.getFieldValue("Buttonpos", 0);
 		final int buttonPositionY = builtInAbilityFunc.getFieldValue("Buttonpos", 1);
 		final String tip = builtInAbility.getField("Tip");
