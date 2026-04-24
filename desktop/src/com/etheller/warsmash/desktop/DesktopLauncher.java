@@ -50,6 +50,35 @@ public class DesktopLauncher {
 		com.etheller.warsmash.util.ImageUtils.textureDecoder = com.etheller.warsmash.util.AwtImageUtils.DECODER;
 		com.etheller.warsmash.parsers.fdf.DynamicFontGeneratorHolderFactory.install(
 				com.etheller.warsmash.parsers.fdf.FreeTypeDynamicFontGeneratorHolder::new);
+		// Networking: desktop installs real factories that reach InetAddress / UDP.
+		// Web never installs these, so the web reachability graph stays clear of
+		// java.net.*. See com.etheller.warsmash.networking.NetworkPlatform.
+		com.etheller.warsmash.networking.NetworkPlatform.installGamingNetworkConnectionFactory(
+				gateway -> new com.etheller.warsmash.networking.uberserver.GamingNetworkConnectionImpl(gateway));
+		com.etheller.warsmash.networking.NetworkPlatform.installGameClientStarter(
+				(hostAddressBytes, hostUdpPort, viewer, sessionToken, serverSlotToMapSlot) -> {
+					final java.net.InetAddress byAddress = java.net.InetAddress.getByAddress(hostAddressBytes);
+					System.err.println("Connecting to address: " + byAddress);
+					final com.etheller.warsmash.networking.WarsmashClient client =
+							new com.etheller.warsmash.networking.WarsmashClient(byAddress, hostUdpPort, viewer,
+									sessionToken, serverSlotToMapSlot);
+					final com.etheller.warsmash.networking.WarsmashClientWriter writer = client.getWriter();
+					writer.joinGame();
+					writer.send();
+					final com.etheller.warsmash.networking.WarsmashClientSendingOrderListener orderListener =
+							new com.etheller.warsmash.networking.WarsmashClientSendingOrderListener(writer);
+					return new com.etheller.warsmash.networking.NetworkGameClientHandle() {
+						@Override
+						public com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListener getOrderListener() {
+							return orderListener;
+						}
+
+						@Override
+						public void startThread() {
+							client.startThread();
+						}
+					};
+				});
 		com.etheller.warsmash.util.Platform.urlOpener = url -> {
 			try {
 				if (java.awt.Desktop.isDesktopSupported()

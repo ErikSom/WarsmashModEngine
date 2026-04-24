@@ -19,6 +19,9 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 	private int workerMessagesShown;
 	private InMemoryDataSource pendingMapSource;
 	private String pendingMapPath;
+	/** Captured during {@link #create()} so the Menu path can hand it to
+	 *  {@link com.etheller.warsmash.WarsmashGdxMenuScreen} verbatim. */
+	private DataTable warsmashIni;
 
 	@Override
 	public void create() {
@@ -48,10 +51,11 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		}
 
 		try (InputStream in = Gdx.files.internal("warsmash.ini").read()) {
-			final DataTable warsmashIni = new DataTable(StringBundle.EMPTY);
-			warsmashIni.readTXT(in, true);
-			final Element emulator = warsmashIni.get("Emulator");
-			WarsmashConstants.loadConstants(emulator, warsmashIni);
+			final DataTable loadedIni = new DataTable(StringBundle.EMPTY);
+			loadedIni.readTXT(in, true);
+			final Element emulator = loadedIni.get("Emulator");
+			WarsmashConstants.loadConstants(emulator, loadedIni);
+			this.warsmashIni = loadedIni;
 			status("warsmash.ini loaded");
 		}
 		catch (final Throwable t) {
@@ -100,7 +104,17 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 			final String mapPath = this.pendingMapPath;
 			this.pendingMapSource = null;
 			this.pendingMapPath = null;
-			setScreen(new WebMapViewScreen(this, source, mapPath));
+			PreloadTuning.ensureInitialized();
+			if (PreloadTuning.menuMode && (this.warsmashIni != null)) {
+				// Use the three-arg ctor so we never reach DataSourceAssembly.parseDataSources
+				// on the web graph — the preloaded in-memory source is passed in directly,
+				// which keeps CASC / MPQ / java.nio.file.* off the TeaVM reachability tree.
+				status("launching WarsmashGdxMenuScreen (menu-mode) for " + mapPath);
+				setScreen(new com.etheller.warsmash.WarsmashGdxMenuScreen(this.warsmashIni, this, source));
+			}
+			else {
+				setScreen(new WebMapViewScreen(this, source, mapPath));
+			}
 		}
 		super.render();
 	}

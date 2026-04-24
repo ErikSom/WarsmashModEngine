@@ -23,7 +23,6 @@ import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.etheller.warsmash.datasources.DataSource;
-import com.etheller.warsmash.networking.uberserver.GamingNetworkConnectionImpl;
 import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.parsers.jass.Jass2.RootFrameListener;
 import com.etheller.warsmash.units.DataTable;
@@ -78,8 +77,14 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	private EnumSet<SecondaryTag> tags = SequenceUtils.EMPTY;
 
 	public WarsmashGdxMenuScreen(final DataTable warsmashIni, final WarsmashGdxMultiScreenGame game) {
+		this(warsmashIni, game, DataSourceAssembly.parseDataSources(warsmashIni));
+	}
+
+	public WarsmashGdxMenuScreen(final DataTable warsmashIni, final WarsmashGdxMultiScreenGame game,
+			final DataSource codebase) {
 		this.warsmashIni = warsmashIni;
 		this.game = game;
+		this.codebase = codebase;
 	}
 
 	@Override
@@ -98,7 +103,6 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 			final String renderer = Gdx.gl.glGetString(GL20.GL_RENDERER);
 			System.err.println("Renderer: " + renderer);
 
-			this.codebase = DataSourceAssembly.parseDataSources(this.warsmashIni);
 			this.viewer = new MdxViewer(this.codebase, this.game);
 
 			this.viewer.addHandler(new MdxHandler());
@@ -199,7 +203,8 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 						public void onCreate(final GameUI rootFrame) {
 //						WarsmashGdxMapGame.this.viewer.setGameUI(rootFrame);
 						}
-					}, new GamingNetworkConnectionImpl(server), mapDownloadDir);
+					}, com.etheller.warsmash.networking.NetworkPlatform.createGamingNetworkConnection(server),
+					mapDownloadDir);
 
 			final ModelInstance libgdxContentInstance = new LibGDXContentLayerModel(null, this.viewer, "",
 					PathSolver.DEFAULT, "").addInstance();

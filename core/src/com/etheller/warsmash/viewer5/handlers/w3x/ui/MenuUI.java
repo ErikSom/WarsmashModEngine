@@ -1,18 +1,13 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
 
-import com.etheller.warsmash.DataSourceAssembly;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.zip.CRC32C;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -33,9 +28,8 @@ import com.etheller.warsmash.WarsmashGdxMenuScreen;
 import com.etheller.warsmash.WarsmashGdxMultiScreenGame;
 import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.networking.GameTurnManager;
-import com.etheller.warsmash.networking.WarsmashClient;
-import com.etheller.warsmash.networking.WarsmashClientSendingOrderListener;
-import com.etheller.warsmash.networking.WarsmashClientWriter;
+import com.etheller.warsmash.networking.NetworkGameClientHandle;
+import com.etheller.warsmash.networking.NetworkPlatform;
 import com.etheller.warsmash.parsers.fdf.GameSkin;
 import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.parsers.fdf.datamodel.AnchorDefinition;
@@ -101,6 +95,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMission;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.sound.KeyedSounds;
 
 import net.warsmash.map.NetMapDownloader;
+import net.warsmash.util.WarsmashCRC32C;
 import net.warsmash.uberserver.AccountCreationFailureReason;
 import net.warsmash.uberserver.ChannelServerMessageType;
 import net.warsmash.uberserver.GameCreationFailureReason;
@@ -493,12 +488,13 @@ public class MenuUI {
 								final String mapFileLookupName = mapDownloadDir + File.separator + mapNameOnly;
 								File mapLookupFile = new File(mapFileLookupName);
 								boolean hasMap = false;
-								final CRC32C checksumCalculator = new CRC32C();
+								final WarsmashCRC32C checksumCalculator = new WarsmashCRC32C();
 								War3Map map = null;
 								int tildeIndex = 1;
 								while (mapLookupFile.exists()) {
 									try {
-										map = War3MapViewer.beginLoadingMap(dataSource, mapLookupFile.getPath());
+										map = War3MapViewer.beginLoadingMapFromDataSource(dataSource,
+												mapLookupFile.getPath());
 										final long localHDDMapChecksum = map.computeChecksum(checksumCalculator);
 										if (localHDDMapChecksum == mapChecksum) {
 											hasMap = true;
@@ -1136,7 +1132,8 @@ public class MenuUI {
 					this.prevSelectedItem = newSelectedItem;
 
 					try {
-						final War3Map map = War3MapViewer.beginLoadingMap(MenuUI.this.dataSource, newSelectedItem);
+						final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(MenuUI.this.dataSource,
+								newSelectedItem);
 						if (this.lastMapListMap != null) {
 							try {
 								this.lastMapListMap.close();
@@ -1646,7 +1643,7 @@ public class MenuUI {
 		this.loadingFrame.setVisible(true);
 		this.loadingBar.setVisible(true);
 		this.loadingCustomPanel.setVisible(true);
-		final DataSource codebase = DataSourceAssembly.parseDataSources(this.warsmashIni);
+		final DataSource codebase = this.dataSource;
 		final GameTurnManager turnManager;
 		turnManager = GameTurnManager.PAUSED;
 		final War3MapViewer viewer = new War3MapViewer(codebase, this.screenManager, this.currentMapConfig,
@@ -1659,7 +1656,7 @@ public class MenuUI {
 			viewer.enableAudio();
 		}
 		try {
-			final War3Map map = War3MapViewer.beginLoadingMap(codebase, mapFilename);
+			final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(codebase, mapFilename);
 			final War3MapW3i mapInfo = map.readMapInformation();
 			final DataTable worldEditData = viewer.loadWorldEditData(map);
 			final WTS wts = viewer.preloadWTS(map);
@@ -1761,7 +1758,7 @@ public class MenuUI {
 	}
 
 	private void loadAndCacheMapConfigs(final String mapFilename) throws IOException {
-		final War3Map map = War3MapViewer.beginLoadingMap(MenuUI.this.dataSource, mapFilename);
+		final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(MenuUI.this.dataSource, mapFilename);
 		final War3MapW3i mapInfo = map.readMapInformation();
 		final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
 		MenuUI.this.rootFrame.setMapStrings(wtsFile);
@@ -1868,37 +1865,34 @@ public class MenuUI {
 						if (this.loadingMap.activeMapLoader != null) {
 							if (this.loadingMap.activeMapLoader.process()) {
 								CPlayerUnitOrderListener uiOrderListener;
-								final WarsmashClient warsmashClient;
+								// The WarsmashClient / InetAddress machinery is desktop-only —
+								// routed through NetworkPlatform so the web reachability graph
+								// never touches java.net.*. NetworkPlatform.startNetworkGameClient
+								// returns a handle on desktop that wraps a live WarsmashClient;
+								// on web it throws (never called, because beginGameInformation is
+								// never populated in the web boot path).
+								final NetworkGameClientHandle networkClient;
 								if (this.beginGameInformation.hostInetAddress != null) {
-
 									try {
-										final InetAddress byAddress = InetAddress
-												.getByAddress(this.beginGameInformation.hostInetAddress);
-										System.err.println("Connecting to address: " + byAddress);
-										warsmashClient = new WarsmashClient(byAddress,
+										networkClient = NetworkPlatform.startNetworkGameClient(
+												this.beginGameInformation.hostInetAddress,
 												this.beginGameInformation.hostUdpPort, this.loadingMap.viewer,
 												this.beginGameInformation.sessionToken,
 												this.beginGameInformation.serverSlotToMapSlot);
 									}
-									catch (final UnknownHostException e) {
-										throw new RuntimeException(e);
-									}
 									catch (final IOException e) {
 										throw new RuntimeException(e);
 									}
-									final WarsmashClientWriter warsmashClientWriter = warsmashClient.getWriter();
-									warsmashClientWriter.joinGame();
-									warsmashClientWriter.send();
-									uiOrderListener = new WarsmashClientSendingOrderListener(warsmashClientWriter);
+									uiOrderListener = networkClient.getOrderListener();
 								}
 								else {
+									networkClient = null;
 									final War3MapViewer mapViewer = this.loadingMap.viewer;
 									final CPlayerUnitOrderExecutor executor = new CPlayerUnitOrderExecutor(
 											this.loadingMap.viewer.simulation, localPlayerIndex);
 									final CPlayerUnitOrderListenerDelaying delayingListener = new CPlayerUnitOrderListenerDelaying(
 											executor);
 									uiOrderListener = delayingListener;
-									warsmashClient = null;
 									mapViewer.setGameTurnManager(new GameTurnManager() {
 										@Override
 										public void turnCompleted(final int gameTurnTick) {
@@ -1930,8 +1924,8 @@ public class MenuUI {
 								this.loadingBar.setVisible(false);
 								this.loadingFrame.setVisible(false);
 								this.loadingBackground.setVisible(false);
-								if (warsmashClient != null) {
-									warsmashClient.startThread();
+								if (networkClient != null) {
+									networkClient.startThread();
 								}
 							}
 							else {
@@ -2219,8 +2213,8 @@ public class MenuUI {
 				Gdx.app.exit();
 				break;
 			case RESTARTING:
-				MenuUI.this.screenManager
-						.setScreen(new WarsmashGdxMenuScreen(MenuUI.this.warsmashIni, this.screenManager));
+				MenuUI.this.screenManager.setScreen(
+						new WarsmashGdxMenuScreen(MenuUI.this.warsmashIni, this.screenManager, MenuUI.this.dataSource));
 				break;
 			default:
 				break;

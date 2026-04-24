@@ -21,7 +21,7 @@ public class ListItemMapProperty extends AbstractListItemProperty {
 		super(dataType, rawValue);
 
 		try {
-			final War3Map map = War3MapViewer.beginLoadingMap(data, rawValue);
+			final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(data, rawValue);
 			final War3MapW3i mapInfo = map.readMapInformation();
 			final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
 			gameUI.setMapStrings(wtsFile);

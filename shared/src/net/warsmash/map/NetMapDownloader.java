@@ -5,7 +5,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.zip.CRC32C;
+
+import net.warsmash.util.WarsmashCRC32C;
 
 public class NetMapDownloader {
 	private final File mapFilePath;
@@ -55,11 +56,20 @@ public class NetMapDownloader {
 		}
 		try (FileChannel readerChannel = FileChannel.open(this.mapFilePath.toPath(), StandardOpenOption.READ)) {
 			final ByteBuffer readBuffer = ByteBuffer.allocate(8 * 1024).clear();
-			final CRC32C checksum = new CRC32C();
+			final WarsmashCRC32C checksum = new WarsmashCRC32C();
 			checksum.reset();
 			while ((readerChannel.read(readBuffer)) != -1) {
 				readBuffer.flip();
-				checksum.update(readBuffer);
+				final int remaining = readBuffer.remaining();
+				if (readBuffer.hasArray()) {
+					checksum.update(readBuffer.array(), readBuffer.arrayOffset() + readBuffer.position(), remaining);
+					readBuffer.position(readBuffer.limit());
+				}
+				else {
+					final byte[] chunk = new byte[remaining];
+					readBuffer.get(chunk);
+					checksum.update(chunk, 0, remaining);
+				}
 				readBuffer.clear();
 			}
 			final long checksumValue = checksum.getValue();

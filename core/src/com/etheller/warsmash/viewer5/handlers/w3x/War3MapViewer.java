@@ -512,6 +512,14 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		return new War3Map(gameDataSource, mapFilePath);
 	}
 
+	public static War3Map beginLoadingMapFromDataSource(final DataSource gameDataSource, final String mapFilePath)
+			throws IOException {
+		if ((mapFilePath == null) || !gameDataSource.has(mapFilePath)) {
+			throw new IllegalArgumentException("No such map in data source: " + mapFilePath);
+		}
+		return new War3Map(gameDataSource, mapFilePath);
+	}
+
 	public DataTable loadWorldEditData(final War3Map map) {
 		final StandardObjectData standardObjectData = new StandardObjectData(map);
 		this.worldEditData = standardObjectData.getWorldEditData();

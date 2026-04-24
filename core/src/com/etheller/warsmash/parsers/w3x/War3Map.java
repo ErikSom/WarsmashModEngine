@@ -205,13 +205,15 @@ public class War3Map implements DataSource {
 		final SeekableByteChannel inputChannel = getInternalMpqContentsDataSource().getInputChannel();
 		try {
 			final ByteBuffer byteBuffer = ByteBuffer.allocate(8 * 1024);
+			final byte[] chunk = new byte[byteBuffer.capacity()];
 			inputChannel.position(0);
 			int result;
 			byteBuffer.clear();
 			checksum.reset();
 			while ((result = inputChannel.read(byteBuffer)) != -1) {
 				byteBuffer.flip();
-				checksum.update(byteBuffer);
+				byteBuffer.get(chunk, 0, result);
+				checksum.update(chunk, 0, result);
 				byteBuffer.clear();
 			}
 			return checksum.getValue();

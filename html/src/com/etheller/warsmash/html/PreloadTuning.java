@@ -22,6 +22,13 @@ final class PreloadTuning {
 	static int opfsConcurrency = 12;
 	static int decodeConcurrency = 6;
 	static boolean tier1Parallel = true;
+	/**
+	 * When true, after preload completes the web boot launches
+	 * {@code WarsmashGdxMenuScreen} (the real MenuUI flow) instead of the
+	 * minimal {@code WebMapViewScreen} direct-map harness. Opt-in while the
+	 * menu path is still being stabilised.
+	 */
+	static boolean menuMode = false;
 
 	private PreloadTuning() {
 	}
@@ -44,6 +51,7 @@ final class PreloadTuning {
 			opfsConcurrency = clamp(intParam(search, "preloadOpfs", opfsConcurrency), 1, 64);
 			decodeConcurrency = clamp(intParam(search, "preloadDecode", decodeConcurrency), 1, 32);
 			tier1Parallel = boolParam(search, "tier1", tier1Parallel);
+			menuMode = boolParam(search, "menu", menuMode);
 		}
 		catch (final Throwable t) {
 			// Defaults are fine if the query string can't be parsed.

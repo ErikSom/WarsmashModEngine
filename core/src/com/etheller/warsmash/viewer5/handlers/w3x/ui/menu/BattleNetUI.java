@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.CRC32C;
 
 import com.badlogic.gdx.utils.IntIntMap;
 import com.badlogic.gdx.utils.viewport.Viewport;
@@ -50,6 +49,7 @@ import net.warsmash.uberserver.ChannelServerMessageType;
 import net.warsmash.uberserver.HostedGameVisibility;
 import net.warsmash.uberserver.LobbyGameSpeed;
 import net.warsmash.uberserver.LobbyPlayerType;
+import net.warsmash.util.WarsmashCRC32C;
 
 public class BattleNetUI {
 	private final GameUI rootFrame;
@@ -507,7 +507,7 @@ public class BattleNetUI {
 					BattleNetUI.this.customCreatePanelCurrentSelectedMapPath = newSelectedItem;
 
 					try {
-						final War3Map map = War3MapViewer.beginLoadingMap(dataSource, newSelectedItem);
+						final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(dataSource, newSelectedItem);
 
 						final War3MapW3i mapInfo = map.readMapInformation();
 						final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
@@ -580,7 +580,7 @@ public class BattleNetUI {
 		}
 
 		this.customCreatePanelCreateButton.setOnClick(new Runnable() {
-			private final CRC32C mapChecksumCalculator = new CRC32C();
+			private final WarsmashCRC32C mapChecksumCalculator = new WarsmashCRC32C();
 
 			@Override
 			public void run() {
@@ -879,7 +879,7 @@ public class BattleNetUI {
 	public void setJoinGamePreviewMap(final File mapLookupFile) {
 		War3Map map;
 		try {
-			map = War3MapViewer.beginLoadingMap(this.dataSource, mapLookupFile.getPath());
+			map = War3MapViewer.beginLoadingMapFromDataSource(this.dataSource, mapLookupFile.getPath());
 
 			final War3MapW3i mapInfo = map.readMapInformation();
 			final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
