@@ -75,6 +75,21 @@ public final class InMemoryDataSource implements DataSource {
 		return Collections.unmodifiableSet(this.filesByLowercasePath.keySet());
 	}
 
+	/**
+	 * Inserts or overwrites a file entry after construction. Exists so the
+	 * web backend can seed the map listing with placeholder entries at boot
+	 * and then fill in the real MPQ bytes when
+	 * {@link com.etheller.warsmash.datasources.MapBytesEnsurer} completes an
+	 * OPFS read. Desktop builds don't call this — map bytes are available
+	 * synchronously via the filesystem datasources.
+	 *
+	 * <p>Safe to call from the main thread only (TeaVM is single-threaded;
+	 * desktop callers, if any are added later, should coordinate externally).
+	 */
+	public void put(final String path, final byte[] bytes) {
+		this.filesByLowercasePath.put(normalize(path), bytes);
+	}
+
 	@Override
 	public void close() {
 		this.filesByLowercasePath.clear();

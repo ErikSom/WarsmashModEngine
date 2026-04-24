@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,6 +18,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.etheller.warsmash.datasources.InMemoryDataSource;
+import com.etheller.warsmash.datasources.MapBytesEnsurer;
 import com.etheller.warsmash.parsers.w3x.War3Map;
 import com.etheller.warsmash.parsers.w3x.w3i.War3MapW3i;
 
@@ -65,6 +67,7 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 			this.batch = new SpriteBatch();
 			this.font = new BitmapFont();
 		}
+		PreloadTuning.ensureInitialized();
 		Gdx.input.setInputProcessor(this);
 		queueScan(0L);
 	}
@@ -174,6 +177,10 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 						+ this.selectedMapPath);
 				this.lastReportedMapCount = this.candidateMaps.size();
 			}
+			if (PreloadTuning.menuMode) {
+				this.game.status("menu-mode: auto-loading selected map " + this.selectedMapPath);
+				startSelectedMapLoad();
+			}
 			return;
 		}
 		if (!this.candidateMaps.isEmpty()) {
@@ -245,6 +252,14 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 					if (this.disposed) {
 						return;
 					}
+					// Surface every OPFS .w3x/.w3m as a bare-filename placeholder in
+					// the shared in-memory DataSource so MenuUI's MapListContainer
+					// (which filters getListfile() for extension + no-slash entries)
+					// actually shows them. The real MPQ bytes are still in OPFS —
+					// fetched lazily by the web MapBytesEnsurer the first time the
+					// user clicks a map in the list, before War3Map's synchronous
+					// constructor runs. See MapBytesEnsurer / InMemoryDataSource.put.
+					registerOpfsMapsAndInstallEnsurer(source, this.candidateMaps);
 					this.game.status("manifest preload complete: " + source.getListfile().size()
 							+ " files, missing=" + missing);
 					this.game.requestMapLaunch(source, this.selectedMapPath);
@@ -315,6 +330,63 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 	private static String mapName(final String path) {
 		final int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
 		return (slash == -1) ? path : path.substring(slash + 1);
+	}
+
+	/**
+	 * After the shared-asset preload finishes, seed the shared
+	 * {@link InMemoryDataSource} with every OPFS-discovered map so that
+	 * MenuUI's {@code MapListContainer} (which filters getListfile() for
+	 * bare-filename .w3x/.w3m) actually shows them. We register each under
+	 * its basename with a zero-length placeholder — the real MPQ bytes are
+	 * only fetched (async, from OPFS) when the user clicks a map in the
+	 * list, via the {@link MapBytesEnsurer} installed here.
+	 *
+	 * <p>The basename→OPFS-path index lives in the ensurer closure; the
+	 * ensurer's contract to the core engine is "after I call onReady,
+	 * {@code dataSource.read(mapKey)} returns real bytes."
+	 */
+	private static void registerOpfsMapsAndInstallEnsurer(final InMemoryDataSource source,
+			final List<String> opfsMapPaths) {
+		final Map<String, String> basenameLowerToOpfsPath = new HashMap<>();
+		for (final String opfsPath : opfsMapPaths) {
+			final String basename = mapName(opfsPath);
+			final String key = basename.toLowerCase(Locale.ROOT).replace('\\', '/');
+			// Last one wins on duplicate basenames. Given the tree is user-staged
+			// assets (not the production Blizzard install), collisions are rare
+			// and "latest scan wins" is a reasonable default.
+			basenameLowerToOpfsPath.put(key, opfsPath);
+			if (!source.has(basename)) {
+				source.put(basename, new byte[0]);
+			}
+		}
+		MapBytesEnsurer.install((dataSource, mapKey, onReady) -> {
+			if (!(dataSource instanceof InMemoryDataSource)) {
+				// Unexpected on web but don't block the caller.
+				onReady.run();
+				return;
+			}
+			final InMemoryDataSource imds = (InMemoryDataSource) dataSource;
+			final java.nio.ByteBuffer existing = imds.read(mapKey);
+			if ((existing != null) && existing.remaining() > 0) {
+				onReady.run();
+				return;
+			}
+			final String lookupKey = mapKey.toLowerCase(Locale.ROOT).replace('\\', '/');
+			final String opfsPath = basenameLowerToOpfsPath.get(lookupKey);
+			if (opfsPath == null) {
+				// Map not in the OPFS index — let the sync loader throw its
+				// usual "no such map" error so the user sees the existing
+				// failure mode instead of a silent hang.
+				onReady.run();
+				return;
+			}
+			MainOpfsBridge.readExtracted(opfsPath, data -> {
+				if (data != null) {
+					imds.put(mapKey, data);
+				}
+				onReady.run();
+			});
+		});
 	}
 
 	private static String normalize(final String path) {

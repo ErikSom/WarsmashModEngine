@@ -27,6 +27,7 @@ import com.etheller.warsmash.MapScreenFactory;
 import com.etheller.warsmash.WarsmashGdxMenuScreen;
 import com.etheller.warsmash.WarsmashGdxMultiScreenGame;
 import com.etheller.warsmash.datasources.DataSource;
+import com.etheller.warsmash.datasources.MapBytesEnsurer;
 import com.etheller.warsmash.networking.GameTurnManager;
 import com.etheller.warsmash.networking.NetworkGameClientHandle;
 import com.etheller.warsmash.networking.NetworkPlatform;
@@ -1125,23 +1126,34 @@ public class MenuUI {
 
 			@Override
 			public void onSelectionChanged(final int newSelectedIndex, final String newSelectedItem) {
-				if (newSelectedItem != null) {
-					if (newSelectedItem.compareTo(this.prevSelectedItem) == 0) {
-						return;
-					}
-					this.prevSelectedItem = newSelectedItem;
+				if (newSelectedItem == null) {
+					return;
+				}
+				if (newSelectedItem.compareTo(this.prevSelectedItem) == 0) {
+					return;
+				}
+				this.prevSelectedItem = newSelectedItem;
 
+				// On web, the map's MPQ bytes live in OPFS and haven't been
+				// materialized into the in-memory DataSource yet. Route through
+				// MapBytesEnsurer so the backend can async-fetch them before the
+				// strictly-synchronous War3Map constructor runs. Desktop installs
+				// a pass-through that fires onReady immediately, so this is a
+				// no-op refactor there.
+				MapBytesEnsurer.get().ensure(MenuUI.this.dataSource, newSelectedItem, new Runnable() {
+					@Override
+					public void run() {
 					try {
 						final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(MenuUI.this.dataSource,
 								newSelectedItem);
-						if (this.lastMapListMap != null) {
+						if (lastMapListMap != null) {
 							try {
-								this.lastMapListMap.close();
+								lastMapListMap.close();
 							}
 							catch (final IOException e) {
 								e.printStackTrace();
 							}
-							this.lastMapListMap = map;
+							lastMapListMap = map;
 						}
 						final War3MapW3i mapInfo = map.readMapInformation();
 						final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
@@ -1185,7 +1197,8 @@ public class MenuUI {
 					catch (final IOException e) {
 						e.printStackTrace();
 					}
-				}
+					}
+				});
 			}
 		});
 		playGameButton.setOnClick(new Runnable() {
