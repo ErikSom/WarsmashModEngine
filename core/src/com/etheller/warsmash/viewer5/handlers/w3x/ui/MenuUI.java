@@ -1120,19 +1120,24 @@ public class MenuUI {
 				0);
 		final MapListContainer mapListContainer = new MapListContainer(this.rootFrame, this.uiViewport,
 				"MapListContainer", this.dataSource, profileListText.getFrameFont());
+		// State shared between the outer listener and the inner Runnable
+		// (invoked post-async by MapBytesEnsurer). Using 1-element arrays as
+		// captured locals rather than anon-class fields keeps the inner
+		// Runnable from having to reach through a nested outer-this synthetic
+		// accessor, which some compilers (and TeaVM) handle less predictably
+		// in anon-inside-anon shapes than single-level capture.
+		final War3Map[] lastMapListMap = { null };
+		final String[] prevSelectedItem = { "" };
 		mapListContainer.addSelectionListener(new ListBoxSelelectionListener() {
-			War3Map lastMapListMap;
-			String prevSelectedItem = "";
-
 			@Override
 			public void onSelectionChanged(final int newSelectedIndex, final String newSelectedItem) {
 				if (newSelectedItem == null) {
 					return;
 				}
-				if (newSelectedItem.compareTo(this.prevSelectedItem) == 0) {
+				if (newSelectedItem.compareTo(prevSelectedItem[0]) == 0) {
 					return;
 				}
-				this.prevSelectedItem = newSelectedItem;
+				prevSelectedItem[0] = newSelectedItem;
 
 				// On web, the map's MPQ bytes live in OPFS and haven't been
 				// materialized into the in-memory DataSource yet. Route through
@@ -1146,14 +1151,14 @@ public class MenuUI {
 					try {
 						final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(MenuUI.this.dataSource,
 								newSelectedItem);
-						if (lastMapListMap != null) {
+						if (lastMapListMap[0] != null) {
 							try {
-								lastMapListMap.close();
+								lastMapListMap[0].close();
 							}
 							catch (final IOException e) {
 								e.printStackTrace();
 							}
-							lastMapListMap = map;
+							lastMapListMap[0] = map;
 						}
 						final War3MapW3i mapInfo = map.readMapInformation();
 						final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);

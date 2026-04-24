@@ -252,17 +252,20 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 					if (this.disposed) {
 						return;
 					}
-					// Surface every OPFS .w3x/.w3m as a bare-filename placeholder in
-					// the shared in-memory DataSource so MenuUI's MapListContainer
-					// (which filters getListfile() for extension + no-slash entries)
-					// actually shows them. The real MPQ bytes are still in OPFS —
-					// fetched lazily by the web MapBytesEnsurer the first time the
-					// user clicks a map in the list, before War3Map's synchronous
-					// constructor runs. See MapBytesEnsurer / InMemoryDataSource.put.
-					registerOpfsMapsAndInstallEnsurer(source, this.candidateMaps);
-					this.game.status("manifest preload complete: " + source.getListfile().size()
-							+ " files, missing=" + missing);
-					this.game.requestMapLaunch(source, this.selectedMapPath);
+					// MapListContainer (core) iterates dataSource.getListfile()
+					// for bare-filename .w3x/.w3m and, for each, *synchronously*
+					// opens the MPQ via ListItemMapProperty -> War3MapViewer.
+					// So the bytes have to be in-memory by the time MenuUI.main
+					// runs — async-read every OPFS map here, register each under
+					// its bare filename, then hand off to WarsmashGdxMenuScreen.
+					preloadAllOpfsMapsAndContinue(source, this.candidateMaps, () -> {
+						if (this.disposed) {
+							return;
+						}
+						this.game.status("manifest preload complete: " + source.getListfile().size()
+								+ " files, missing=" + missing);
+						this.game.requestMapLaunch(source, this.selectedMapPath);
+					});
 				});
 			}
 			catch (final Exception e) {
@@ -333,35 +336,65 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 	}
 
 	/**
-	 * After the shared-asset preload finishes, seed the shared
-	 * {@link InMemoryDataSource} with every OPFS-discovered map so that
-	 * MenuUI's {@code MapListContainer} (which filters getListfile() for
-	 * bare-filename .w3x/.w3m) actually shows them. We register each under
-	 * its basename with a zero-length placeholder — the real MPQ bytes are
-	 * only fetched (async, from OPFS) when the user clicks a map in the
-	 * list, via the {@link MapBytesEnsurer} installed here.
+	 * Reads every OPFS-discovered map's bytes (async, in parallel) into the
+	 * shared {@link InMemoryDataSource} under its bare filename, then fires
+	 * {@code onAllLoaded}. MenuUI's {@code MapListContainer} iterates
+	 * {@link com.etheller.warsmash.datasources.DataSource#getListfile()}
+	 * and synchronously opens each listed map via
+	 * {@code ListItemMapProperty} → {@code War3MapViewer.beginLoadingMapFromDataSource}
+	 * to pull name / player count / melee-flag for the list item display.
+	 * That means real bytes must be live in-memory before the menu screen
+	 * constructs the list — a post-selection lazy fetch via
+	 * {@link MapBytesEnsurer} is too late for the enumeration pass.
 	 *
-	 * <p>The basename→OPFS-path index lives in the ensurer closure; the
-	 * ensurer's contract to the core engine is "after I call onReady,
-	 * {@code dataSource.read(mapKey)} returns real bytes."
+	 * <p>We also install a residual {@link MapBytesEnsurer} that lazy-loads
+	 * any map that slipped past the bulk preload (e.g. added to OPFS
+	 * mid-session), keeping the core indirection honest for future use.
+	 *
+	 * <p>Cold-boot cost: each staged map is ~1–5 MB. Even a Blizzard-sized
+	 * install of ~30 maps is well under 100 MB, which is small next to the
+	 * existing shared-asset preload. If this becomes a problem we can
+	 * switch to reading just the MPQ header + (war3map.w3i) sub-file per
+	 * map at boot and defer the full MPQ to selection time, but that
+	 * requires a core change (MapListContainer would need a
+	 * per-item-metadata hook distinct from opening the whole MPQ).
 	 */
-	private static void registerOpfsMapsAndInstallEnsurer(final InMemoryDataSource source,
-			final List<String> opfsMapPaths) {
+	private static void preloadAllOpfsMapsAndContinue(final InMemoryDataSource source,
+			final List<String> opfsMapPaths, final Runnable onAllLoaded) {
+		if (opfsMapPaths.isEmpty()) {
+			installResidualEnsurer(source, new HashMap<>());
+			onAllLoaded.run();
+			return;
+		}
 		final Map<String, String> basenameLowerToOpfsPath = new HashMap<>();
 		for (final String opfsPath : opfsMapPaths) {
 			final String basename = mapName(opfsPath);
 			final String key = basename.toLowerCase(Locale.ROOT).replace('\\', '/');
-			// Last one wins on duplicate basenames. Given the tree is user-staged
-			// assets (not the production Blizzard install), collisions are rare
-			// and "latest scan wins" is a reasonable default.
+			// Last-write-wins on basename collisions (rare outside of user
+			// staging trees; Blizzard's install has unique map filenames).
 			basenameLowerToOpfsPath.put(key, opfsPath);
-			if (!source.has(basename)) {
-				source.put(basename, new byte[0]);
-			}
 		}
+		final int total = opfsMapPaths.size();
+		final int[] remaining = { total };
+		for (final String opfsPath : opfsMapPaths) {
+			final String basename = mapName(opfsPath);
+			MainOpfsBridge.readExtracted(opfsPath, data -> {
+				if (data != null) {
+					source.put(basename, data);
+				}
+				remaining[0]--;
+				if (remaining[0] == 0) {
+					installResidualEnsurer(source, basenameLowerToOpfsPath);
+					onAllLoaded.run();
+				}
+			});
+		}
+	}
+
+	private static void installResidualEnsurer(final InMemoryDataSource source,
+			final Map<String, String> basenameLowerToOpfsPath) {
 		MapBytesEnsurer.install((dataSource, mapKey, onReady) -> {
 			if (!(dataSource instanceof InMemoryDataSource)) {
-				// Unexpected on web but don't block the caller.
 				onReady.run();
 				return;
 			}
@@ -374,9 +407,6 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 			final String lookupKey = mapKey.toLowerCase(Locale.ROOT).replace('\\', '/');
 			final String opfsPath = basenameLowerToOpfsPath.get(lookupKey);
 			if (opfsPath == null) {
-				// Map not in the OPFS index — let the sync loader throw its
-				// usual "no such map" error so the user sees the existing
-				// failure mode instead of a silent hang.
 				onReady.run();
 				return;
 			}
