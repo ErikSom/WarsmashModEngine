@@ -47,6 +47,15 @@ public class BlpTexture extends RawOpenGLTextureResource {
 					return;
 				}
 			}
+			if (src == null) {
+				// Upstream couldn't locate the BLP bytes (e.g. a destructable's
+				// shadow field is a sentinel like "none" / "_" / blank that still
+				// slipped through to a load call). Leaving the texture
+				// un-updated is safer than crashing the whole map load — callers
+				// that bind this downstream render with a default texture rather
+				// than NPEing.
+				return;
+			}
 			final byte[] bytes = readAll(src);
 			final Pixmap pm = ImageUtils.decodeToPixmap(bytes);
 			if (pm != null) {

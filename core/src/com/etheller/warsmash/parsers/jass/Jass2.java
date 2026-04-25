@@ -1,7 +1,12 @@
 package com.etheller.warsmash.parsers.jass;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -312,9 +317,28 @@ public class Jass2 {
 			final String jassFilePath) {
 		final String jassFile = jassFilePath;
 		try {
-			try (InputStreamReader reader = new InputStreamReader(dataSource.getResourceAsStream(jassFile))) {
-				final SmashJassParser smashJassParser = new SmashJassParser(reader);
-				smashJassParser.scanAndParse(jassFile, jassProgramVisitor);
+			try (InputStream is = dataSource.getResourceAsStream(jassFile)) {
+				if (is == null) {
+					return;
+				}
+				// Materialize the file into a String before handing it to JFlex.
+				// TeaVM's InputStreamReader/StreamDecoder emulation can return 0
+				// chars on a non-EOF read for ByteArrayInputStream-backed streams,
+				// which JFlex's zzRefill treats as fatal ("Reader returned 0
+				// characters"). Buffering through StringReader sidesteps the
+				// decode chain and is semantically equivalent for UTF-8 JASS
+				// source files. No behavior change on desktop.
+				final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				final byte[] buf = new byte[8192];
+				int n;
+				while ((n = is.read(buf)) != -1) {
+					baos.write(buf, 0, n);
+				}
+				final String content = new String(baos.toByteArray(), StandardCharsets.UTF_8);
+				try (Reader reader = new StringReader(content)) {
+					final SmashJassParser smashJassParser = new SmashJassParser(reader);
+					smashJassParser.scanAndParse(jassFile, jassProgramVisitor);
+				}
 			}
 		}
 		catch (final Exception e) {
@@ -381,15 +405,8 @@ public class Jass2 {
 		final JUIEnvironment environment = new JUIEnvironment(jassProgramVisitor, dataSource, uiViewport, uiScene,
 				war3MapViewer, rootFrameListener);
 		for (final String jassFile : files) {
-			try {
-				try (InputStreamReader reader = new InputStreamReader(dataSource.getResourceAsStream(jassFile))) {
-					final SmashJassParser smashJassParser = new SmashJassParser(reader);
-					smashJassParser.scanAndParse(jassFile, jassProgramVisitor);
-				}
-			}
-			catch (final Exception e) {
-				e.printStackTrace();
-			}
+			// Same TeaVM-friendly buffered read as readJassFile above.
+			readJassFile(dataSource, jassProgramVisitor, jassFile);
 		}
 		try {
 			jassProgramVisitor.initialize();

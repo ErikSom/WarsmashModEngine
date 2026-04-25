@@ -26,6 +26,9 @@ public class DataSourceFDFParserBuilder implements FDFParserBuilder {
 	public FDFParser build(final String path) {
 		FDFLexer lexer;
 		try (InputStream stream = this.dataSource.getResourceAsStream(path)) {
+			if (stream == null) {
+				throw new IllegalArgumentException("Missing FDF file: " + path);
+			}
 			lexer = new FDFLexer(CharStreams.fromString(readString(stream)));
 		}
 		catch (final IOException e) {

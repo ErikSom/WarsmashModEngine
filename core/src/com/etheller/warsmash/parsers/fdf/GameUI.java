@@ -227,11 +227,18 @@ public final class GameUI extends AbstractUIFrame implements UIFrame, SkinResolv
 		final FrameDefinitionVisitor fdfVisitor = new FrameDefinitionVisitor(this.templates,
 				dataSourceFDFParserBuilder);
 		System.err.println("Loading TOC file: " + tocFilePath);
-		try (BufferedReader reader = new BufferedReader(
-				new InputStreamReader(this.dataSource.getResourceAsStream(tocFilePath)))) {
+		final InputStream tocStream = this.dataSource.getResourceAsStream(tocFilePath);
+		if (tocStream == null) {
+			throw new IllegalArgumentException("Missing TOC file: " + tocFilePath);
+		}
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(tocStream))) {
 			String line;
 			int tocLines = 0;
 			while ((line = reader.readLine()) != null) {
+				line = line.trim();
+				if (line.isEmpty() || line.startsWith("//")) {
+					continue;
+				}
 				final FDFParser firstFileParser = dataSourceFDFParserBuilder.build(line);
 				fdfVisitor.visit(firstFileParser.program());
 				tocLines++;

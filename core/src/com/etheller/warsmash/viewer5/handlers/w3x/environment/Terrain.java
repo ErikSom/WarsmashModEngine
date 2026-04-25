@@ -1264,6 +1264,12 @@ public class Terrain {
 	}
 
 	public BuildingShadow addShadow(final String file, final float shadowX, final float shadowY) {
+		// Sentinel strings the WC3 SLKs use to say "no shadow". Treat as no-op
+		// rather than trying to load ReplaceableTextures\Shadows\none.blp etc.,
+		// which blows up downstream in BlpTexture.readAll with a null src.
+		if ((file == null) || file.isEmpty() || "_".equals(file) || "none".equalsIgnoreCase(file)) {
+			return null;
+		}
 		if (!this.shadows.containsKey(file)) {
 			final String path = "ReplaceableTextures\\Shadows\\" + file + ".blp";
 			this.shadows.put(file, new ArrayList<>());

@@ -794,13 +794,19 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		RemovablePathingMapInstance destructablePathingDeath = null;
 		final MdxModel model = getDoodadModel(doodadVariation, row);
 
+		// Treat "_" / blank as the Blizzard "no portrait" sentinel (same
+		// convention applied a few lines down for `shadow`). Otherwise the
+		// concatenation producesthe infamous "_.mdx" path and crashes the
+		// whole doodad/destructable load.
 		final String portraitModelPath = row.readSLKTag("portraitmodel");
-		final MdxModel portraitModel = loadModelMdx(portraitModelPath);
+		final MdxModel portraitModel = ((portraitModelPath != null) && (portraitModelPath.length() > 0)
+				&& !"_".equals(portraitModelPath)) ? loadModelMdx(portraitModelPath) : null;
 
 		final float maxPitch = row.readSLKTagFloat("maxPitch");
 		final float maxRoll = row.readSLKTagFloat("maxRoll");
 		final String shadowString = row.readSLKTag("shadow");
-		if ((shadowString != null) && (shadowString.length() > 0) && !"_".equals(shadowString)) {
+		if ((shadowString != null) && (shadowString.length() > 0) && !"_".equals(shadowString)
+				&& !"none".equalsIgnoreCase(shadowString)) {
 			destructableShadow = this.terrain.addShadow(shadowString, location[0], location[1]);
 		}
 

@@ -3,10 +3,13 @@ package com.etheller.warsmash.html;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.etheller.warsmash.WarsmashGdxMultiScreenGame;
+import com.etheller.warsmash.datasources.CompoundDataSource;
+import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.datasources.InMemoryDataSource;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
@@ -48,6 +51,21 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		}
 		catch (final Throwable t) {
 			status("extensions ERROR: " + t.getMessage());
+		}
+
+		// Hand MenuUI the factory it uses to transition off the main menu onto
+		// the actual in-game screen once MapLoader is done. Without this the
+		// completion branch in MenuUI just clears the loading bar and leaves
+		// the user stranded on the menu (MapScreenFactory.get() returns null
+		// and the setScreen call is skipped).
+		try {
+			com.etheller.warsmash.MapScreenFactory.register(
+					(viewer, screenManager, menuScreen, uiOrderListener) -> new com.etheller.warsmash.WarsmashGdxMapScreen(
+							viewer, screenManager, menuScreen, uiOrderListener));
+			status("map screen factory registered");
+		}
+		catch (final Throwable t) {
+			status("map screen factory ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
 		}
 
 		try (InputStream in = Gdx.files.internal("warsmash.ini").read()) {
@@ -104,19 +122,24 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 			final String mapPath = this.pendingMapPath;
 			this.pendingMapSource = null;
 			this.pendingMapPath = null;
+			final DataSource launchDataSource = createLaunchDataSource(source);
 			PreloadTuning.ensureInitialized();
-			if (PreloadTuning.menuMode && (this.warsmashIni != null)) {
-				// Use the three-arg ctor so we never reach DataSourceAssembly.parseDataSources
-				// on the web graph — the preloaded in-memory source is passed in directly,
-				// which keeps CASC / MPQ / java.nio.file.* off the TeaVM reachability tree.
-				status("launching WarsmashGdxMenuScreen (menu-mode) for " + mapPath);
-				setScreen(new com.etheller.warsmash.WarsmashGdxMenuScreen(this.warsmashIni, this, source));
+			if (this.warsmashIni == null) {
+				status("warsmash.ini missing — cannot launch menu screen");
 			}
 			else {
-				setScreen(new WebMapViewScreen(this, source, mapPath));
+				// Use the three-arg ctor so we never reach DataSourceAssembly.parseDataSources
+				// on the web graph. The preloaded OPFS datasource stays on top, while
+				// bundled libGDX internal assets fill in Warsmash-specific resources.
+				status("launching WarsmashGdxMenuScreen for " + mapPath);
+				setScreen(new com.etheller.warsmash.WarsmashGdxMenuScreen(this.warsmashIni, this, launchDataSource));
 			}
 		}
 		super.render();
+	}
+
+	private DataSource createLaunchDataSource(final InMemoryDataSource preloadedSource) {
+		return new CompoundDataSource(Arrays.asList(new GdxInternalDataSource(), preloadedSource));
 	}
 
 	private void drainWorkerLog() {

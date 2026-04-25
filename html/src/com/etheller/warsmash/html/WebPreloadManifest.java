@@ -17,6 +17,7 @@ final class WebPreloadManifest {
 			"environment/",
 			"objects/",
 			"replaceabletextures/",
+			"scripts/",
 			"sharedmodels/",
 			"splats/",
 			"terrainart/",

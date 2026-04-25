@@ -149,12 +149,12 @@ public class ATNDeserializer {
 	 * introduced; otherwise, {@code false}.
 	 */
 	static protected boolean isFeatureSupported(UUID feature, UUID actualUuid) {
-		int featureIndex = SUPPORTED_UUIDS.indexOf(feature);
+		int featureIndex = supportedUuidIndex(feature);
 		if (featureIndex < 0) {
 			return false;
 		}
 
-		return SUPPORTED_UUIDS.indexOf(actualUuid) >= featureIndex;
+		return supportedUuidIndex(actualUuid) >= featureIndex;
 	}
 
 	@SuppressWarnings("deprecation")
@@ -189,7 +189,7 @@ public class ATNDeserializer {
 
 		UUID uuid = toUUID(data, p);
 		p += 8;
-		if (!SUPPORTED_UUIDS.contains(uuid)) {
+		if (supportedUuidIndex(uuid) < 0) {
 			String reason = String.format(Locale.getDefault(), "Could not deserialize ATN with UUID %s (expected %s or a legacy UUID).", uuid, SERIALIZED_UUID);
 			throw new UnsupportedOperationException(new InvalidClassException(ATN.class.getName(), reason));
 		}
@@ -703,6 +703,20 @@ public class ATNDeserializer {
 		String s = hi.substring(0, 8) + "-" + hi.substring(8, 12) + "-" + hi.substring(12, 16)
 				+ "-" + lo.substring(0, 4) + "-" + lo.substring(4, 16);
 		return UUID.fromString(s);
+	}
+
+	private static int supportedUuidIndex(UUID candidate) {
+		if (candidate == null) {
+			return -1;
+		}
+		final String candidateText = candidate.toString();
+		for (int i = 0; i < SUPPORTED_UUIDS.size(); i++) {
+			final UUID supported = SUPPORTED_UUIDS.get(i);
+			if ((supported != null) && supported.toString().equalsIgnoreCase(candidateText)) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	private static String padHex16(long v) {

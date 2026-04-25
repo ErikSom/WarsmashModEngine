@@ -25,6 +25,14 @@ public class DdsTexture extends RawOpenGLTextureResource {
 
 	@Override
 	protected void load(final Object src, final Object options) {
+		if (src == null) {
+			// Upstream couldn't locate the DDS bytes (e.g. HD replaceable
+			// texture that isn't in the data source). Leaving the texture
+			// un-updated is safer than crashing the whole map load — callers
+			// that bind this downstream already render "no texture" with a
+			// default rather than NPE.
+			return;
+		}
 		try {
 			final byte[] bytes = readAll(src);
 			final Pixmap pm = ImageUtils.decodeToPixmap(bytes);

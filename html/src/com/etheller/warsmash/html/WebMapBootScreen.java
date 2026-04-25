@@ -177,10 +177,11 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 						+ this.selectedMapPath);
 				this.lastReportedMapCount = this.candidateMaps.size();
 			}
-			if (PreloadTuning.menuMode) {
-				this.game.status("menu-mode: auto-loading selected map " + this.selectedMapPath);
-				startSelectedMapLoad();
-			}
+			// Single-flow web boot: auto-advance straight into the preload for
+			// the preferred default map, then hand off to WarsmashGdxMenuScreen.
+			// The user picks any other map from the real WC3 menu once it's up.
+			this.game.status("auto-loading default map " + this.selectedMapPath);
+			startSelectedMapLoad();
 			return;
 		}
 		if (!this.candidateMaps.isEmpty()) {

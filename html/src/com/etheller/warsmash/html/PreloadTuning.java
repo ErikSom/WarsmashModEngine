@@ -3,8 +3,8 @@ package com.etheller.warsmash.html;
 import org.teavm.jso.JSBody;
 
 /**
- * Feature flags and pool sizes for the web-port preload pipeline. Values can be
- * overridden at boot time via URL query params — no rebuild needed when tuning:
+ * Web-port preload pipeline tuning. Pool sizes and the Tier-1 parallel-pump
+ * flag; overridable at boot via URL query params — no rebuild needed:
  *
  * <pre>
  *   ?preloadOpfs=N        override opfsConcurrency (integer, clamped to [1,64])
@@ -12,9 +12,9 @@ import org.teavm.jso.JSBody;
  *   ?tier1=0|1            enable/disable the parallel pump in ExtractedPreloader
  * </pre>
  *
- * <p>The defaults are tuned for Chrome/Firefox with a typical 4-8-core desktop.
- * Canvas {@code getImageData} is still main-thread, so pushing decodeConcurrency
- * above {@code navigator.hardwareConcurrency / 2} tends not to help.
+ * <p>Defaults tuned for Chrome/Firefox with a typical 4-8-core desktop. Canvas
+ * {@code getImageData} is still main-thread, so pushing decodeConcurrency above
+ * {@code navigator.hardwareConcurrency / 2} tends not to help.
  */
 final class PreloadTuning {
 	private static boolean initialized;
@@ -22,13 +22,6 @@ final class PreloadTuning {
 	static int opfsConcurrency = 12;
 	static int decodeConcurrency = 6;
 	static boolean tier1Parallel = true;
-	/**
-	 * When true, after preload completes the web boot launches
-	 * {@code WarsmashGdxMenuScreen} (the real MenuUI flow) instead of the
-	 * minimal {@code WebMapViewScreen} direct-map harness. Opt-in while the
-	 * menu path is still being stabilised.
-	 */
-	static boolean menuMode = false;
 
 	private PreloadTuning() {
 	}
@@ -51,7 +44,6 @@ final class PreloadTuning {
 			opfsConcurrency = clamp(intParam(search, "preloadOpfs", opfsConcurrency), 1, 64);
 			decodeConcurrency = clamp(intParam(search, "preloadDecode", decodeConcurrency), 1, 32);
 			tier1Parallel = boolParam(search, "tier1", tier1Parallel);
-			menuMode = boolParam(search, "menu", menuMode);
 		}
 		catch (final Throwable t) {
 			// Defaults are fine if the query string can't be parsed.
