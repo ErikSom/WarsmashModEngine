@@ -114,6 +114,11 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		System.out.println("[web-boot] " + s);
 	}
 
+	/** Read-only view used by {@link WebMapBootScreen} to paint a status tail. */
+	public List<String> getStatusLines() {
+		return this.statusLines;
+	}
+
 	@Override
 	public void render() {
 		drainWorkerLog();

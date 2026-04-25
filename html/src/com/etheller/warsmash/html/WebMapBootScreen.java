@@ -83,14 +83,15 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
 		this.batch.begin();
-		float y = Gdx.graphics.getHeight() - 24;
+		final int height = Gdx.graphics.getHeight();
+		float y = height - 24;
 		drawLine("Warsmash web boot", 24, y);
 		y -= 28;
 		switch (this.state) {
 		case SCANNING:
-			drawLine("Waiting for extracted assets and mirrored maps...", 24, y);
+			drawLine("Extracting Warcraft III install into browser storage (OPFS)...", 24, y);
 			y -= 22;
-			drawLine("The worker extracts staged MPQs and mirrors staged .w3x/.w3m maps into /extracted.", 24, y);
+			drawLine("The worker is unpacking MPQs and mirroring maps. This can take a while on first boot.", 24, y);
 			break;
 		case SELECTING:
 			drawLine("Select a map to boot. Arrow keys move, Enter loads, or click a map.", 24, y);
@@ -112,7 +113,35 @@ final class WebMapBootScreen implements Screen, InputProcessor {
 		default:
 			break;
 		}
+
+		drawStatusTail(height);
 		this.batch.end();
+	}
+
+	/**
+	 * Draws a tail of {@link WebWarsmashGame#getStatusLines} along the bottom of
+	 * the screen so the user can see real-time boot progress (worker extraction
+	 * messages, OPFS reads, preload chunks) instead of staring at near-black.
+	 * The most recent line is at the bottom; older lines fade above it. Sized to
+	 * leave room for the headline at the top.
+	 */
+	private void drawStatusTail(final int screenHeight) {
+		final List<String> lines = this.game.getStatusLines();
+		if ((lines == null) || lines.isEmpty()) {
+			return;
+		}
+		final int lineHeight = 16;
+		// Reserve the top ~120 px for the heading + state lines, draw the tail
+		// below that down to the bottom of the screen with a small margin.
+		final int reservedTop = 140;
+		final int bottomMargin = 24;
+		final int maxLines = Math.max(1, (screenHeight - reservedTop - bottomMargin) / lineHeight);
+		final int from = Math.max(0, lines.size() - maxLines);
+		float y = bottomMargin + ((lines.size() - from) * lineHeight);
+		for (int i = from; i < lines.size(); i++) {
+			drawLine(lines.get(i), 24, y);
+			y -= lineHeight;
+		}
 	}
 
 	private void drawMapList(final float startY) {
