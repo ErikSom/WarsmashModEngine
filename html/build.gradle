@@ -22,9 +22,23 @@ task buildWorker(dependsOn: classes, type: JavaExec) {
     ignoreExitValue = false
 }
 
-task copyWebOverrides(type: Copy) {
-    from "webapp-src"
-    into "build/dist/webapp"
+// Plain task (not type: Copy) so Gradle does NOT register
+// build/dist/webapp as an exclusive managed output for this task.
+// A `Copy` task auto-treats its `into` directory as its output dir and runs
+// stale-output cleanup, which on a fresh build (Cloudflare Pages, or local
+// `gradlew clean`) deletes the TeaVM-produced app.js and assets/ that
+// :html:buildWeb just wrote. Locally this was masked by incremental
+// up-to-date state keeping copyWebOverrides from running.
+task copyWebOverrides {
+    description = "Lay webapp-src overrides on top of the TeaVM build output."
+    inputs.dir file("webapp-src")
+    // No outputs.dir declared on purpose — see comment above.
+    doLast {
+        copy {
+            from "webapp-src"
+            into "build/dist/webapp"
+        }
+    }
 }
 
 buildWeb.finalizedBy copyWebOverrides
