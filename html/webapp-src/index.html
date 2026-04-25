@@ -63,16 +63,13 @@
 <body oncontextmenu="return false">
 	<div id="overlay">
 		<h1>Warsmash (web)</h1>
-		<p>To boot the engine the browser needs Warcraft III data in private browser storage (OPFS).
-			On desktop you can stage the whole install folder. For the MPQ-first path you can also stage the core
-			<code>.mpq</code> files plus a <code>.w3x</code> or <code>.w3m</code> map.</p>
+		<p>To boot the engine the browser needs your Warcraft III install staged in private browser storage (OPFS).
+			Pick your Warcraft III folder once — after that, the cached install is reused on every visit.</p>
 		<div class="row">
+			<button id="resume-btn" style="display:none">Play game</button>
 			<label class="fakebtn" for="dir-input">Select Warcraft III folder</label>
 			<input id="dir-input" type="file" webkitdirectory multiple style="display:none">
-			<label class="fakebtn secondary" for="file-input">Select MPQs / maps</label>
-			<input id="file-input" type="file" accept=".mpq,.w3x,.w3m" multiple style="display:none">
 			<button id="start-btn" style="display:none">Start extraction and engine</button>
-			<button id="resume-btn" class="secondary" style="display:none">Resume with cached assets</button>
 			<button id="reset-btn" class="secondary" style="display:none">Clear cached assets</button>
 		</div>
 		<div id="progress"><div id="progress-bar"></div></div>
@@ -187,13 +184,20 @@
 			el('resume-btn').style.display = (!engineStarted && !uploadSessionDirty && hasAssets) ? '' : 'none';
 			el('resume-btn').disabled = !hasMap;
 			el('reset-btn').style.display = hasAssets ? '' : 'none';
+			// When cached assets exist, "Play game" is the obvious primary action;
+			// demote the folder-pick label to a secondary style so re-uploading the
+			// install reads as a fallback rather than the headline action.
+			const dirLabel = document.querySelector('label.fakebtn[for="dir-input"]');
+			if (dirLabel) {
+				dirLabel.classList.toggle('secondary', hasAssets && !uploadSessionDirty);
+			}
 		}
 
 		function buildNextStep(summary) {
 			if (summary.mapCount > 0) {
-				return 'Press "Start extraction and engine" to extract and boot.';
+				return 'Press "Play game" to boot the engine.';
 			}
-			return 'No map files are staged yet. Use the full install folder for stock maps, or add a .w3x/.w3m file before starting.';
+			return 'No map files are staged yet. Re-select your Warcraft III folder so a stock map (e.g. Echo Isles) is included.';
 		}
 
 		function sanitizeFileName(name) {
@@ -220,7 +224,6 @@
 			el('progress').style.display = 'block';
 			el('progress-bar').style.width = '0%';
 			el('dir-input').disabled = true;
-			el('file-input').disabled = true;
 			el('start-btn').disabled = true;
 			el('resume-btn').disabled = true;
 			el('reset-btn').disabled = true;
@@ -274,7 +277,6 @@
 				setSummary(summary.fileCount ? formatSummary(summary) : '');
 				refreshButtons(summary);
 				el('dir-input').disabled = false;
-				el('file-input').disabled = false;
 				el('reset-btn').disabled = false;
 			}
 		}
@@ -366,13 +368,6 @@
 			el('dir-input').addEventListener('change', (e) => {
 				if (e.target.files && e.target.files.length) {
 					stageFiles(e.target.files, { mode: 'directory', replaceExisting: true })
-						.catch(err => setError(String(err)))
-						.finally(() => { e.target.value = ''; });
-				}
-			});
-			el('file-input').addEventListener('change', (e) => {
-				if (e.target.files && e.target.files.length) {
-					stageFiles(e.target.files, { mode: 'files', replaceExisting: !uploadSessionDirty })
 						.catch(err => setError(String(err)))
 						.finally(() => { e.target.value = ''; });
 				}
