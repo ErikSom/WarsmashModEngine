@@ -95,6 +95,32 @@
 		let uploadSessionDirty = false;
 		let engineStarted = false;
 
+		// --- Screen wake lock --------------------------------------------------
+		// Hold the screen awake during MPQ extraction and engine boot. Mobile
+		// browsers throttle background tabs hard: workers stall, OPFS writes
+		// drop to ~1 Hz, and the user comes back to a frozen page. Wake lock
+		// keeps the page foreground+active while the heavy work runs. Browsers
+		// without the API (older iOS) silently no-op.
+		let wakeLock = null;
+		async function acquireWakeLock() {
+			if (wakeLock || !('wakeLock' in navigator)) return;
+			try {
+				wakeLock = await navigator.wakeLock.request('screen');
+				wakeLock.addEventListener('release', () => { wakeLock = null; });
+			}
+			catch (_) {
+				// Permission denied / page not visible; ignore — the user can
+				// just keep the screen on manually.
+			}
+		}
+		document.addEventListener('visibilitychange', () => {
+			// Browsers auto-release the wake lock when the tab is hidden. When
+			// the user comes back during a still-active session, re-acquire.
+			if (document.visibilityState === 'visible' && (uploadSessionDirty || engineStarted)) {
+				acquireWakeLock();
+			}
+		});
+
 		async function getW3Root(create = false) {
 			const root = await navigator.storage.getDirectory();
 			return await root.getDirectoryHandle(ROOT_DIR, { create });
@@ -221,6 +247,7 @@
 
 		async function stageFiles(files, options) {
 			setError('');
+			acquireWakeLock();
 			el('progress').style.display = 'block';
 			el('progress-bar').style.width = '0%';
 			el('dir-input').disabled = true;
@@ -283,6 +310,7 @@
 
 		function startEngine() {
 			engineStarted = true;
+			acquireWakeLock();
 			el('overlay').style.display = 'none';
 			el('canvas-wrap').style.display = 'flex';
 			spawnExtractionWorker();
