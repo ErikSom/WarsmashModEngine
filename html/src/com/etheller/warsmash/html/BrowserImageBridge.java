@@ -126,17 +126,23 @@ final class BrowserImageBridge {
 					+ "  var x, y, j, r, g, b, a;"
 					+ "  if (comps === 4) {"
 					// 4-channel JPEG BLP: components are stored as BGRA.
-					// 4th component IS the display alpha — same convention
-					// for every 4-channel BLP. comp[3]=0 means transparent,
-					// comp[3]=255 means opaque. PictureType 5 is the rare
-					// "inverted alpha" flag that has historically been used.
+					// 4th component IS the display alpha as stored —
+					// comp[3]=0 means transparent, comp[3]=255 means opaque.
+					// Do NOT apply the pictureType=5 inversion here: that
+					// flag historically meant "the separate alpha stream
+					// is stored inverted", and only applies when the BLP
+					// has a separate alpha stream (alphaDepth > 0). For
+					// 4-channel JPEGs the alpha is in-band and stored
+					// straight. Inverting it broke command-card icons
+					// (BTNAttack / BTNMove / BTNStop are JPEG BLPs with
+					// pictureType=5 and comp[3] consistently 255 = opaque;
+					// inverting yielded alpha=0 across the entire texture).
 					+ "    for (y = 0; y < height; y++) {"
 					+ "      for (x = 0; x < width; x++) {"
 					+ "        b = sampleComp(0, x, y);"
 					+ "        g = sampleComp(1, x, y);"
 					+ "        r = sampleComp(2, x, y);"
 					+ "        a = sampleComp(3, x, y);"
-					+ "        if (pictureType === 5) { a = 255 - a; }"
 					+ "        put((y * width + x) * 4, r, g, b, a);"
 					+ "      }"
 					+ "    }"
@@ -255,15 +261,15 @@ final class BrowserImageBridge {
 					+ "  };"
 					+ "  var x, y, j, r, g, b, a;"
 					+ "  if (comps === 4) {"
-					// 4-channel JPEG BLP: BGRA. Match the sync decoder:
-					// always use comp[3] as alpha. PictureType 5 inverts.
+					// 4-channel JPEG BLP: BGRA, comp[3] is the in-band display
+					// alpha (255 = opaque). Do NOT apply pictureType=5 inversion
+					// — see sync decoder above for the reasoning.
 					+ "    for (y = 0; y < height; y++) {"
 					+ "      for (x = 0; x < width; x++) {"
 					+ "        b = sampleComp(0, x, y);"
 					+ "        g = sampleComp(1, x, y);"
 					+ "        r = sampleComp(2, x, y);"
 					+ "        a = sampleComp(3, x, y);"
-					+ "        if (pictureType === 5) { a = 255 - a; }"
 					+ "        putRgba((y * width + x) * 4, r, g, b, a);"
 					+ "      }"
 					+ "    }"

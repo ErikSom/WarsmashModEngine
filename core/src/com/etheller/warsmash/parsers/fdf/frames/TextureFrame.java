@@ -87,7 +87,13 @@ public class TextureFrame extends AbstractRenderableFrame {
 					this.texCoord.getW());
 		}
 		else {
-			texRegion = new TextureRegion(texture);
+			// Avoid the {@code new TextureRegion(Texture)} pixel-coord constructor:
+			// it computes UVs as {@code x / texture.getWidth()}, which on the TeaVM
+			// libGDX backend can divide by zero when the source Texture was made via
+			// {@code new Texture(w, h, RGBA8888)} (the empty-Pixmap stub used by
+			// {@code WebTextureDecoder.rgbaToTexture}). The resulting NaN UVs draw
+			// nothing — visible as missing command-card icons. Pass UVs directly.
+			texRegion = new TextureRegion(texture, 0f, 0f, 1f, 1f);
 		}
 		this.texture = texRegion;
 	}
