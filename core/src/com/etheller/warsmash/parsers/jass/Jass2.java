@@ -4127,8 +4127,14 @@ public class Jass2 {
 									war3MapViewer.solverParams);
 						}
 						catch (final Exception exc) {
-							System.err.println("Preload(\"" + filename + "\") failed!");
-							exc.printStackTrace();
+							// Use System.out (→ console.log) not System.err (→
+							// console.error). Chrome attaches a stack trace to
+							// every console.error call, and TeaVM stack traces are
+							// thousands of frames; with dozens of Preload(...)
+							// calls per session DevTools grinds to a halt. Plain
+							// console.log has no auto-stack overhead.
+							System.out.println("Preload(\"" + filename + "\") failed: "
+									+ exc.getClass().getSimpleName() + ": " + exc.getMessage());
 						}
 					}
 					return null;
@@ -9225,9 +9231,12 @@ public class Jass2 {
 				this.jassProgramVisitor.getGlobals().queueThread(abilitiesThread);
 			}
 			catch (final Exception exc) {
-				new JassException(this.jassProgramVisitor.getGlobals(),
-						"Exception on Line " + this.jassProgramVisitor.getGlobals().getLineNumber(), exc)
-						.printStackTrace();
+				// Non-fatal — abilities_main isn't always present in the
+				// loaded JASS file set; most stock maps work fine without
+				// it. Use System.out (→ console.log) so DevTools doesn't
+				// auto-attach a 1000-frame TeaVM stack trace to the message.
+				System.out.println("abilities_main thread spawn skipped: "
+						+ exc.getClass().getSimpleName() + ": " + exc.getMessage());
 			}
 			try {
 				final JassThread mainThread = this.jassProgramVisitor.getGlobals().createThread("main",
@@ -9636,9 +9645,24 @@ public class Jass2 {
 			final String[] originalFiles, final JassProgram jassProgramVisitor, final String mainFunction) {
 		final Integer prevPtr = jassProgramVisitor.getGlobals().getUserFunctionInstructionPtr(mainFunction);
 		try {
-			try (InputStreamReader reader = new InputStreamReader(dataSource.getResourceAsStream(filename))) {
-				final SmashJassParser smashJassParser = new SmashJassParser(reader);
-				smashJassParser.scanAndParse(filename, jassProgramVisitor);
+			// Same TeaVM-friendly buffered read as Jass2.readJassFile —
+			// InputStreamReader on TeaVM can return 0 chars on a non-EOF
+			// read for ByteArrayInputStream-backed streams, which JFlex
+			// treats as fatal. Materialise the file into a String first.
+			try (InputStream is = dataSource.getResourceAsStream(filename)) {
+				if (is != null) {
+					final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+					final byte[] buf = new byte[8192];
+					int n;
+					while ((n = is.read(buf)) != -1) {
+						baos.write(buf, 0, n);
+					}
+					final String content = new String(baos.toByteArray(), StandardCharsets.UTF_8);
+					try (Reader reader = new StringReader(content)) {
+						final SmashJassParser smashJassParser = new SmashJassParser(reader);
+						smashJassParser.scanAndParse(filename, jassProgramVisitor);
+					}
+				}
 			}
 			jassProgramVisitor.initialize();
 		}
