@@ -58,6 +58,98 @@ final class BrowserImageBridge {
 				});
 	}
 
+	/**
+	 * Synchronous variant for the decode-on-demand thumbnail path. Always
+	 * goes through the jpeg-js library (which decodes synchronously inside
+	 * {@code decoder.parse}) — never through the async createImageBitmap
+	 * fast path. Designed for tiny mips (1×1 to ~16×16); calling it on a
+	 * full-resolution JPEG works but blocks the main thread for the decode
+	 * duration. Returns null on failure (jpeg-js missing, malformed JPEG).
+	 */
+	static byte[] decodeJpegBlpMipToRgbaSync(final JpegMipData mipData) {
+		if (mipData == null) {
+			return null;
+		}
+		final int w = mipData.getWidth();
+		final int h = mipData.getHeight();
+		final Int8Array jpegBytes = toInt8Array(mipData.getJpegBytes());
+		final byte[] alphaBytesArray = mipData.getAlphaBytes();
+		final Int8Array alphaBytes = toInt8Array(alphaBytesArray == null ? new byte[0] : alphaBytesArray);
+		final Int8Array result = decodeJpegBlpMipToRgbaSyncImpl(jpegBytes, alphaBytes, mipData.getAlphaDepth(),
+				mipData.getPictureType(), w, h);
+		return toByteArray(result);
+	}
+
+	@JSBody(params = { "jpegBytes", "alphaBytes", "alphaDepth", "pictureType", "width", "height" },
+			script = ""
+					+ "try {"
+					+ "  if (!window['jpeg-js'] || !window['jpeg-js'].JpegImage) { return null; }"
+					+ "  var jpeg = new Uint8Array(jpegBytes.buffer, jpegBytes.byteOffset, jpegBytes.byteLength);"
+					+ "  var alpha = alphaBytes ? new Uint8Array(alphaBytes.buffer, alphaBytes.byteOffset, alphaBytes.byteLength) : new Uint8Array(0);"
+					+ "  var JpegImage = window['jpeg-js'].JpegImage;"
+					+ "  var decoder = new JpegImage();"
+					+ "  decoder.opts = { useTArray: true, formatAsRGBA: true, colorTransform: false,"
+					+ "                    tolerantDecoding: true, maxResolutionInMP: 100, maxMemoryUsageInMB: 64 };"
+					+ "  JpegImage.resetMaxMemoryUsage(decoder.opts.maxMemoryUsageInMB * 1024 * 1024);"
+					+ "  decoder.parse(jpeg);"
+					+ "  var comps = decoder.components.length;"
+					+ "  var compData = [];"
+					+ "  for (var ci = 0; ci < comps; ci++) {"
+					+ "    var c = decoder.components[ci];"
+					+ "    compData.push({ lines: c.lines, scaleX: c.scaleX, scaleY: c.scaleY });"
+					+ "  }"
+					+ "  var sampleComp = function(ci, x, y) {"
+					+ "    var cc = compData[ci];"
+					+ "    var line = cc.lines[(y * cc.scaleY) | 0];"
+					+ "    return line[(x * cc.scaleX) | 0];"
+					+ "  };"
+					+ "  var hasSeparateAlpha = (alphaDepth > 0) && (alpha.length > 0);"
+					+ "  var rgba = new Int8Array(width * height * 4);"
+					+ "  var put = function(j, r, g, b, a) {"
+					+ "    rgba[j]     = (r > 127) ? (r - 256) : r;"
+					+ "    rgba[j + 1] = (g > 127) ? (g - 256) : g;"
+					+ "    rgba[j + 2] = (b > 127) ? (b - 256) : b;"
+					+ "    rgba[j + 3] = (a > 127) ? (a - 256) : a;"
+					+ "  };"
+					+ "  var x, y, j, r, g, b, a;"
+					+ "  if (comps === 4) {"
+					+ "    var fourthIsAlpha = alphaDepth > 0;"
+					+ "    for (y = 0; y < height; y++) {"
+					+ "      for (x = 0; x < width; x++) {"
+					+ "        b = sampleComp(0, x, y);"
+					+ "        g = sampleComp(1, x, y);"
+					+ "        r = sampleComp(2, x, y);"
+					+ "        a = fourthIsAlpha ? sampleComp(3, x, y) : 255;"
+					+ "        if (pictureType === 5 && fourthIsAlpha) { a = 255 - a; }"
+					+ "        put((y * width + x) * 4, r, g, b, a);"
+					+ "      }"
+					+ "    }"
+					+ "  } else if (comps === 3) {"
+					+ "    var clamp = function(v) { return v < 0 ? 0 : (v > 255 ? 255 : v | 0); };"
+					+ "    for (y = 0; y < height; y++) {"
+					+ "      for (x = 0; x < width; x++) {"
+					+ "        var Y  = sampleComp(0, x, y);"
+					+ "        var Cb = sampleComp(1, x, y);"
+					+ "        var Cr = sampleComp(2, x, y);"
+					+ "        r = clamp(Y + 1.402 * (Cr - 128));"
+					+ "        g = clamp(Y - 0.3441363 * (Cb - 128) - 0.71413636 * (Cr - 128));"
+					+ "        b = clamp(Y + 1.772 * (Cb - 128));"
+					+ "        put((y * width + x) * 4, r, g, b, 255);"
+					+ "      }"
+					+ "    }"
+					+ "  } else if (comps === 1) {"
+					+ "    for (y = 0; y < height; y++) {"
+					+ "      for (x = 0; x < width; x++) {"
+					+ "        var yy = sampleComp(0, x, y);"
+					+ "        put((y * width + x) * 4, yy, yy, yy, 255);"
+					+ "      }"
+					+ "    }"
+					+ "  } else { return null; }"
+					+ "  return rgba;"
+					+ "} catch (e) { return null; }")
+	private static native Int8Array decodeJpegBlpMipToRgbaSyncImpl(Int8Array jpegBytes, Int8Array alphaBytes,
+			int alphaDepth, int pictureType, int width, int height);
+
 	private static Int8Array toInt8Array(final byte[] bytes) {
 		final Int8Array arr = Int8Array.create(bytes.length);
 		for (int i = 0; i < bytes.length; i++) {

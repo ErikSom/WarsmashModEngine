@@ -57,6 +57,18 @@ public final class ImageUtils {
 
 		/** Look up an asset as raw RGBA pixels plus its color-space hint. */
 		DecodedImage getAnyExtensionImageData(DataSource dataSource, String path);
+
+		/**
+		 * Same as {@link #getAnyExtensionImageData} but returns null on cache
+		 * miss rather than synthesising a placeholder. Used by the web build's
+		 * {@link com.etheller.warsmash.viewer5.handlers.blp.BlpTexture} so a
+		 * missing JPEG BLP falls through to its decode-on-demand branch
+		 * instead of short-circuiting on a magenta/thumbnail placeholder.
+		 * Default impl just delegates so desktop behaves identically.
+		 */
+		default DecodedImage getAnyExtensionImageDataCachedOnly(final DataSource dataSource, final String path) {
+			return getAnyExtensionImageData(dataSource, path);
+		}
 	}
 
 	public static Texture getAnyExtensionTexture(final DataSource dataSource, final String path) {
@@ -71,6 +83,13 @@ public final class ImageUtils {
 			throw new IllegalStateException("ImageUtils.textureDecoder is unset — platform bootstrap missing");
 		}
 		return textureDecoder.getAnyExtensionImageData(dataSource, path);
+	}
+
+	public static DecodedImage getAnyExtensionImageDataCachedOnly(final DataSource dataSource, final String path) {
+		if (textureDecoder == null) {
+			throw new IllegalStateException("ImageUtils.textureDecoder is unset — platform bootstrap missing");
+		}
+		return textureDecoder.getAnyExtensionImageDataCachedOnly(dataSource, path);
 	}
 
 	public static Texture decode(final byte[] bytes, final boolean sRGBFix) {

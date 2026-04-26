@@ -126,15 +126,32 @@ public final class Blp1Decoder {
 	}
 
 	public static JpegMipData extractJpegMip0Data(final byte[] bytes) {
-		if (!isBlp1(bytes) || !isJpeg(bytes) || (bytes.length < (HEADER_SIZE + 4))) {
+		return extractJpegMipData(bytes, 0);
+	}
+
+	/**
+	 * Extract the JPEG bytes + alpha stream for an arbitrary mip level (0 = full
+	 * resolution, increasing levels = halved each time, up to 15). BLP1 stores
+	 * 16 mip slots; the first one with non-zero offset+size is valid and the
+	 * chain typically halts when the smaller dimension reaches 1.
+	 *
+	 * <p>Used by the decode-on-demand path: a small mip (e.g. 4×4) is decoded
+	 * synchronously to upload an instant blurry placeholder, while the full-res
+	 * mip 0 is decoded asynchronously in the background.
+	 */
+	public static JpegMipData extractJpegMipData(final byte[] bytes, final int mipLevel) {
+		if (!isBlp1(bytes) || !isJpeg(bytes) || (bytes.length < (HEADER_SIZE + 4))
+				|| (mipLevel < 0) || (mipLevel > 15)) {
 			return null;
 		}
 		final int alphaDepth = readInt(bytes, 8);
-		final int width = readInt(bytes, 12);
-		final int height = readInt(bytes, 16);
+		final int width0 = readInt(bytes, 12);
+		final int height0 = readInt(bytes, 16);
 		final int pictureType = readInt(bytes, 20);
-		final int mipOffset = readInt(bytes, 28);
-		final int mipSize = readInt(bytes, 92);
+		final int mipOffset = readInt(bytes, 28 + (mipLevel * 4));
+		final int mipSize = readInt(bytes, 92 + (mipLevel * 4));
+		final int width = Math.max(1, width0 >> mipLevel);
+		final int height = Math.max(1, height0 >> mipLevel);
 		final int jpegHeaderLength = readInt(bytes, HEADER_SIZE);
 		final int jpegHeaderOffset = HEADER_SIZE + 4;
 		if ((width <= 0) || (height <= 0) || (mipOffset <= 0) || (mipSize <= 0) || (jpegHeaderLength <= 0)
@@ -160,6 +177,28 @@ public final class Blp1Decoder {
 		return new JpegMipData(width, height, alphaDepth, pictureType, jpegBytes, alphaBytes);
 	}
 
+	/**
+	 * Walk the JPEG mip chain looking for a "thumbnail" mip — small enough
+	 * that the sync decode is a couple of milliseconds at most, but big
+	 * enough to retain the actual visual character of the texture under GL
+	 * upscale (a 4×4 stretched to 256×256 with linear filtering is almost
+	 * indistinguishable from a flat color block; 32×32 still has visible
+	 * features). Picks the smallest mip whose larger dimension is ≥ 32, or
+	 * mip 0 if the source is smaller than that.
+	 */
+	public static JpegMipData extractThumbnailJpegMipData(final byte[] bytes) {
+		for (int level = 15; level >= 0; level--) {
+			final JpegMipData data = extractJpegMipData(bytes, level);
+			if (data == null) {
+				continue;
+			}
+			if (Math.max(data.getWidth(), data.getHeight()) >= 32) {
+				return data;
+			}
+		}
+		return extractJpegMipData(bytes, 0);
+	}
+
 	private static int findJpegEndOffset(final byte[] jpegBytes) {
 		for (int i = jpegBytes.length - 2; i >= 0; i--) {
 			if (((jpegBytes[i] & 0xFF) == 0xFF) && ((jpegBytes[i + 1] & 0xFF) == 0xD9)) {
@@ -179,7 +218,16 @@ public final class Blp1Decoder {
 	}
 
 	public static RgbaImage decodePaletteMip0RgbaImage(final byte[] bytes) {
-		if (!isBlp1(bytes) || (bytes.length < HEADER_SIZE)) {
+		return decodePaletteMipNRgbaImage(bytes, 0);
+	}
+
+	/**
+	 * Decode an arbitrary-level mip from a palette BLP. Same semantics as
+	 * {@link #decodePaletteMip0RgbaImage(byte[])} but indexed by mip level so
+	 * the decode-on-demand path can grab a small thumbnail mip synchronously.
+	 */
+	public static RgbaImage decodePaletteMipNRgbaImage(final byte[] bytes, final int mipLevel) {
+		if (!isBlp1(bytes) || (bytes.length < HEADER_SIZE) || (mipLevel < 0) || (mipLevel > 15)) {
 			return null;
 		}
 		final int compression = readInt(bytes, 4);
@@ -187,11 +235,13 @@ public final class Blp1Decoder {
 			return null; // not a palette BLP
 		}
 		final int alphaDepth = readInt(bytes, 8);
-		final int width = readInt(bytes, 12);
-		final int height = readInt(bytes, 16);
+		final int width0 = readInt(bytes, 12);
+		final int height0 = readInt(bytes, 16);
 		final int pictureType = readInt(bytes, 20);
-		final int mipOffset = readInt(bytes, 28);
-		final int mipSize = readInt(bytes, 28 + 64);
+		final int mipOffset = readInt(bytes, 28 + (mipLevel * 4));
+		final int mipSize = readInt(bytes, 28 + 64 + (mipLevel * 4));
+		final int width = Math.max(1, width0 >> mipLevel);
+		final int height = Math.max(1, height0 >> mipLevel);
 
 		if ((width <= 0) || (height <= 0) || (mipOffset <= 0) || (mipSize <= 0)
 				|| ((mipOffset + mipSize) > bytes.length)) {
@@ -228,6 +278,27 @@ public final class Blp1Decoder {
 			}
 		}
 		return new RgbaImage(width, height, rgba);
+	}
+
+	/**
+	 * Smallest-but-not-too-small palette mip; same selection rule as
+	 * {@link #extractThumbnailJpegMipData(byte[])}.
+	 */
+	public static RgbaImage decodeThumbnailPaletteMipRgbaImage(final byte[] bytes) {
+		RgbaImage smallestSeen = null;
+		for (int level = 15; level >= 0; level--) {
+			final RgbaImage img = decodePaletteMipNRgbaImage(bytes, level);
+			if (img == null) {
+				continue;
+			}
+			if (smallestSeen == null) {
+				smallestSeen = img;
+			}
+			if (Math.max(img.getWidth(), img.getHeight()) >= 4) {
+				return img;
+			}
+		}
+		return smallestSeen;
 	}
 
 	private static Pixmap decodeJpegMip0(final byte[] bytes) {

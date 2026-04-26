@@ -22,6 +22,16 @@ final class PreloadTuning {
 	static int opfsConcurrency = 12;
 	static int decodeConcurrency = 6;
 	static boolean tier1Parallel = true;
+	/**
+	 * When true (default), the preload pump skips JPEG BLP canvas decoding
+	 * entirely — bytes still go into the {@link com.etheller.warsmash.datasources.InMemoryDataSource}
+	 * but {@link DecodedRgbaCache} stays empty for JPEG BLPs. At texture-bind
+	 * time {@link WebBlpAsyncUpgrader} synchronously decodes a small thumbnail
+	 * mip for the immediate placeholder and asynchronously decodes mip 0 to
+	 * upgrade the texture. Set {@code ?lazyBlp=0} to fall back to the eager
+	 * preload-time decode path (slower first-frame time, no thumbnail pop-in).
+	 */
+	static boolean lazyDecodeBlp = true;
 
 	private PreloadTuning() {
 	}
@@ -44,6 +54,7 @@ final class PreloadTuning {
 			opfsConcurrency = clamp(intParam(search, "preloadOpfs", opfsConcurrency), 1, 64);
 			decodeConcurrency = clamp(intParam(search, "preloadDecode", decodeConcurrency), 1, 32);
 			tier1Parallel = boolParam(search, "tier1", tier1Parallel);
+			lazyDecodeBlp = boolParam(search, "lazyBlp", lazyDecodeBlp);
 		}
 		catch (final Throwable t) {
 			// Defaults are fine if the query string can't be parsed.

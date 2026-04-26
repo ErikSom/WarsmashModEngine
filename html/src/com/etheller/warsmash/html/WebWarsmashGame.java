@@ -68,6 +68,19 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 			status("map screen factory ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
 		}
 
+		// Decode-on-demand: BlpTexture.load uses this to upload a sync-decoded
+		// thumbnail mip immediately, then the upgrader async-decodes mip 0
+		// and re-uploads the texture once ready. Pairs with skipping JPEG BLP
+		// decode in ExtractedPreloader so first-frame time isn't gated on the
+		// canvas decode tail.
+		try {
+			com.etheller.warsmash.viewer5.handlers.blp.BlpAsyncUpgrader.register(new WebBlpAsyncUpgrader());
+			status("BLP async upgrader registered (decode-on-demand)");
+		}
+		catch (final Throwable t) {
+			status("BLP upgrader ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+		}
+
 		try (InputStream in = Gdx.files.internal("warsmash.ini").read()) {
 			final DataTable loadedIni = new DataTable(StringBundle.EMPTY);
 			loadedIni.readTXT(in, true);

@@ -54,6 +54,38 @@ public final class WebTextureDecoder implements TextureDecoder {
 	}
 
 	@Override
+	public DecodedImage getAnyExtensionImageDataCachedOnly(final DataSource dataSource, final String path) {
+		// Cache-hit-only variant. Only returns a DecodedImage when the
+		// {@link DecodedRgbaCache} already has full RGBA for this path
+		// (e.g. populated by an earlier WebBlpAsyncUpgrader async upgrade).
+		// Returns null otherwise — including for JPEG BLP cache miss, where
+		// the standard variant would synthesise a magenta placeholder.
+		// BlpTexture relies on this to fall through to its decode-on-demand
+		// branch and schedule the async full-res upgrade.
+		final RgbaImage cached = DecodedRgbaCache.take(path);
+		if (cached != null) {
+			return new DecodedImage(false, cached, cached);
+		}
+		// Palette BLPs decode synchronously and quickly even on the web —
+		// no upgrade needed, just hand back the full mip-0 RGBA so BlpTexture
+		// uploads it directly. Same logic as the regular variant for palette
+		// BLPs only (deliberately skips the JPEG / generic fallback path).
+		try {
+			final byte[] bytes = readPath(dataSource, path);
+			if ((bytes != null) && Blp1Decoder.isBlp1(bytes) && !Blp1Decoder.isJpeg(bytes)) {
+				final RgbaImage palette = Blp1Decoder.decodePaletteMip0RgbaImage(bytes);
+				if (palette != null) {
+					return new DecodedImage(false, palette, palette);
+				}
+			}
+		}
+		catch (final IOException e) {
+			// Fall through to null.
+		}
+		return null;
+	}
+
+	@Override
 	public DecodedImage getAnyExtensionImageData(final DataSource dataSource, final String path) {
 		// First check the side cache populated by ExtractedPreloader for JPEG BLPs —
 		// those are decoded in the browser at preload time and stashed as raw RGBA,
@@ -75,8 +107,29 @@ public final class WebTextureDecoder implements TextureDecoder {
 		if (Blp1Decoder.isBlp1(bytes)) {
 			image = Blp1Decoder.decodeMip0RgbaImage(bytes);
 			if ((image == null) && Blp1Decoder.isJpeg(bytes)) {
-				System.err.println("Using placeholder for unsupported JPEG BLP on web: " + path);
-				image = Blp1Decoder.createPlaceholderMip0RgbaImage(bytes);
+				// JPEG BLP cache miss. Synchronously decode mip 0 via
+				// jpeg-js — slower than the async canvas path but the only
+				// option for callers like Terrain / GroundTexture / UI atlas
+				// that build their texture once and don't have a re-upload
+				// hook for an async upgrade. The set is small (~tens of
+				// textures), so the cumulative main-thread cost is bounded
+				// (~1-2 s spread across engine boot).
+				final com.etheller.warsmash.util.Blp1Decoder.JpegMipData mip0 = Blp1Decoder.extractJpegMip0Data(bytes);
+				if (mip0 != null) {
+					final byte[] rgba = BrowserImageBridge.decodeJpegBlpMipToRgbaSync(mip0);
+					if (rgba != null) {
+						final ByteBuffer buf = ByteBuffer.allocateDirect(rgba.length);
+						for (int i = 0; i < rgba.length; i++) {
+							buf.put(i, rgba[i]);
+						}
+						buf.position(0);
+						image = new RgbaImage(mip0.getWidth(), mip0.getHeight(), buf);
+					}
+				}
+				if (image == null) {
+					System.err.println("JPEG BLP sync decode failed; using placeholder for: " + path);
+					image = Blp1Decoder.createPlaceholderMip0RgbaImage(bytes);
+				}
 			}
 		}
 		else if (TgaDecoder.isTga(bytes)) {

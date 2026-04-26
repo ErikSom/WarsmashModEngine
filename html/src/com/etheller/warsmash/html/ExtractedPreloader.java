@@ -53,6 +53,7 @@ public final class ExtractedPreloader {
 		}
 	}
 
+
 	// ---------------------------------------------------------------------
 	// Tier 1 parallel pump
 	// ---------------------------------------------------------------------
@@ -163,6 +164,15 @@ public final class ExtractedPreloader {
 		}
 
 		private static boolean shouldDecode(final String path, final byte[] data) {
+			// When decode-on-demand is enabled (default) the preloader stops
+			// pre-decoding JPEG BLPs entirely — that 5+ s canvas decode tail
+			// gets paid only for textures the player actually looks at,
+			// asynchronously, behind a thumbnail-mip placeholder uploaded by
+			// WebBlpAsyncUpgrader. Setting ?lazyBlp=0 brings back the eager
+			// path for A/B comparisons.
+			if (PreloadTuning.lazyDecodeBlp) {
+				return false;
+			}
 			if ((data == null) || (path == null) || !path.toLowerCase().endsWith(".blp")) {
 				return false;
 			}
@@ -216,6 +226,12 @@ public final class ExtractedPreloader {
 	}
 
 	private static void maybeAddDecodedRgbaVariant(final String path, final byte[] data, final Runnable done) {
+		// Mirror the parallel pump's lazyDecodeBlp gate so the legacy serial
+		// path also defers JPEG BLP decode to texture-bind time.
+		if (PreloadTuning.lazyDecodeBlp) {
+			done.run();
+			return;
+		}
 		if ((data == null) || (path == null) || !path.toLowerCase().endsWith(".blp") || !Blp1Decoder.isJpeg(data)) {
 			done.run();
 			return;
