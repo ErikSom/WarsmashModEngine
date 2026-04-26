@@ -60,8 +60,17 @@ public final class RgbaImage {
 	public Pixmap toPixmap() {
 		final Pixmap pixmap = new Pixmap(this.width, this.height, Format.RGBA8888);
 		final ByteBuffer target = pixmap.getPixels();
-		target.position(0);
-		target.put(getPixels());
+		final ByteBuffer source = getPixels();
+		// Per-byte absolute put — verified to round-trip correctly on the
+		// TeaVM/web backend, unlike the bulk put(ByteBuffer) which silently
+		// zeroes the destination (every Pixmap-wrapped texture would come
+		// out fully transparent / all-zero RGBA, manifesting as missing
+		// command-card ability icons and similar). Same workaround
+		// {@link com.etheller.warsmash.html.DecodedRgbaCache} uses.
+		final int n = source.remaining();
+		for (int i = 0; i < n; i++) {
+			target.put(i, source.get(i));
+		}
 		target.position(0);
 		return pixmap;
 	}

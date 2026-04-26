@@ -50,7 +50,7 @@ public final class WebTextureDecoder implements TextureDecoder {
 	public Texture getAnyExtensionTexture(final DataSource dataSource, final String path) {
 		final DecodedImage image = getAnyExtensionImageData(dataSource, path);
 		return ((image == null) || (image.getImageData() == null)) ? placeholder()
-				: toTexture(image.getImageData().toPixmap());
+				: rgbaToTexture(image.getImageData());
 	}
 
 	@Override
@@ -195,6 +195,42 @@ public final class WebTextureDecoder implements TextureDecoder {
 
 	private static Texture toTexture(final Pixmap pm) {
 		final Texture t = new Texture(pm);
+		t.setFilter(TextureFilter.Linear, TextureFilter.Linear);
+		return t;
+	}
+
+	/**
+	 * Build a {@link Texture} from an {@link RgbaImage} bypassing the
+	 * {@code Pixmap → new Texture(pm)} round-trip. On the TeaVM/web backend
+	 * that round-trip silently zeroes the pixel buffer (same family of bug
+	 * already worked around in {@code BlpTexture.updateFromRgba}). Without
+	 * this, ability-icon BLPs decode correctly to RGBA but upload to GL as
+	 * all-zero textures — visible as missing icons in the command card.
+	 *
+	 * <p>We construct an empty Texture to get a valid GL handle of the
+	 * right dimensions, bind it, then re-upload our RGBA bytes via direct
+	 * {@code glTexImage2D}. Allocates a fresh direct ByteBuffer so the
+	 * source bytes survive the per-byte copy that's actually needed for
+	 * TeaVM correctness (the {@link DecodedRgbaCache#take} pattern).
+	 */
+	private static Texture rgbaToTexture(final RgbaImage rgba) {
+		final int w = rgba.getWidth();
+		final int h = rgba.getHeight();
+		final Texture t = new Texture(w, h, Pixmap.Format.RGBA8888);
+		t.bind();
+		final com.badlogic.gdx.graphics.GL20 gl = com.badlogic.gdx.Gdx.gl20;
+		final ByteBuffer source = rgba.getPixels();
+		final int n = source.remaining();
+		final ByteBuffer buf = ByteBuffer.allocateDirect(n);
+		for (int i = 0; i < n; i++) {
+			buf.put(i, source.get(i));
+		}
+		buf.position(0);
+		gl.glPixelStorei(com.badlogic.gdx.graphics.GL20.GL_UNPACK_ALIGNMENT, 1);
+		gl.glTexImage2D(com.badlogic.gdx.graphics.GL20.GL_TEXTURE_2D, 0,
+				com.badlogic.gdx.graphics.GL20.GL_RGBA, w, h, 0,
+				com.badlogic.gdx.graphics.GL20.GL_RGBA,
+				com.badlogic.gdx.graphics.GL20.GL_UNSIGNED_BYTE, buf);
 		t.setFilter(TextureFilter.Linear, TextureFilter.Linear);
 		return t;
 	}
