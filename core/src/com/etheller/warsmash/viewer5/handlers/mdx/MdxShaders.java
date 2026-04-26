@@ -753,8 +753,15 @@ public class MdxShaders {
 			"      uv = v_uvScale * (uv - 0.5) + 0.5;\r\n" + //
 			"      vec4 texel = texture2D(u_texture, uv);\r\n" + //
 			"      vec4 color = texel * v_color;\r\n" + //
+			// Drop the previous `u_vertexColor.a == 1.0` gate — it caused
+			// alpha-test to silently fail whenever the uniform's alpha
+			// drifted from exact 1.0, leaving transparent texels rendered
+			// with their (near-black) RGB instead of being discarded.
+			// That was the "black around tree leaves / waterfall" symptom
+			// on the menu's 3D scene under WebGL2. Match fsSimple /
+			// fsComplexShadowMap / fsHd — they all gate solely on filterMode.
 			"      // 1bit Alpha\r\n" + //
-			"      if (u_vertexColor.a == 1.0 && u_filterMode == 1.0 && color.a < 0.75) {\r\n" + //
+			"      if (u_filterMode == 1.0 && color.a < 0.75) {\r\n" + //
 			"        discard;\r\n" + //
 			"      }\r\n" + //
 			"      // \"Close to 0 alpha\"\r\n" + //

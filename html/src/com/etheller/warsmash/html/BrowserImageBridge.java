@@ -103,6 +103,18 @@ final class BrowserImageBridge {
 					+ "    var line = cc.lines[(y * cc.scaleY) | 0];"
 					+ "    return line[(x * cc.scaleX) | 0];"
 					+ "  };"
+					+ "  var decodeAlpha = function(pixelIndex) {"
+					+ "    var a = 255;"
+					+ "    switch (alphaDepth) {"
+					+ "      case 0: a = 255; break;"
+					+ "      case 1: { var b = alpha[pixelIndex >> 3] || 0; a = (((b >>> (pixelIndex & 7)) & 1) === 0) ? 0 : 255; break; }"
+					+ "      case 4: { var b = alpha[pixelIndex >> 1] || 0; var nib = ((pixelIndex & 1) === 0) ? (b & 15) : ((b >>> 4) & 15); a = nib * 17; break; }"
+					+ "      case 8: a = alpha[pixelIndex] || 0; break;"
+					+ "      default: a = 255; break;"
+					+ "    }"
+					+ "    if (pictureType === 5) { a = 255 - a; }"
+					+ "    return a;"
+					+ "  };"
 					+ "  var hasSeparateAlpha = (alphaDepth > 0) && (alpha.length > 0);"
 					+ "  var rgba = new Int8Array(width * height * 4);"
 					+ "  var put = function(j, r, g, b, a) {"
@@ -113,14 +125,18 @@ final class BrowserImageBridge {
 					+ "  };"
 					+ "  var x, y, j, r, g, b, a;"
 					+ "  if (comps === 4) {"
-					+ "    var fourthIsAlpha = alphaDepth > 0;"
+					// 4-channel JPEG BLP: components are stored as BGRA.
+					// 4th component IS the display alpha — same convention
+					// for every 4-channel BLP. comp[3]=0 means transparent,
+					// comp[3]=255 means opaque. PictureType 5 is the rare
+					// "inverted alpha" flag that has historically been used.
 					+ "    for (y = 0; y < height; y++) {"
 					+ "      for (x = 0; x < width; x++) {"
 					+ "        b = sampleComp(0, x, y);"
 					+ "        g = sampleComp(1, x, y);"
 					+ "        r = sampleComp(2, x, y);"
-					+ "        a = fourthIsAlpha ? sampleComp(3, x, y) : 255;"
-					+ "        if (pictureType === 5 && fourthIsAlpha) { a = 255 - a; }"
+					+ "        a = sampleComp(3, x, y);"
+					+ "        if (pictureType === 5) { a = 255 - a; }"
 					+ "        put((y * width + x) * 4, r, g, b, a);"
 					+ "      }"
 					+ "    }"
@@ -134,14 +150,16 @@ final class BrowserImageBridge {
 					+ "        r = clamp(Y + 1.402 * (Cr - 128));"
 					+ "        g = clamp(Y - 0.3441363 * (Cb - 128) - 0.71413636 * (Cr - 128));"
 					+ "        b = clamp(Y + 1.772 * (Cb - 128));"
-					+ "        put((y * width + x) * 4, r, g, b, 255);"
+					+ "        a = hasSeparateAlpha ? decodeAlpha(y * width + x) : 255;"
+					+ "        put((y * width + x) * 4, r, g, b, a);"
 					+ "      }"
 					+ "    }"
 					+ "  } else if (comps === 1) {"
 					+ "    for (y = 0; y < height; y++) {"
 					+ "      for (x = 0; x < width; x++) {"
 					+ "        var yy = sampleComp(0, x, y);"
-					+ "        put((y * width + x) * 4, yy, yy, yy, 255);"
+					+ "        a = hasSeparateAlpha ? decodeAlpha(y * width + x) : 255;"
+					+ "        put((y * width + x) * 4, yy, yy, yy, a);"
 					+ "      }"
 					+ "    }"
 					+ "  } else { return null; }"
@@ -172,40 +190,16 @@ final class BrowserImageBridge {
 
 	@JSBody(params = { "jpegBytes", "alphaBytes", "alphaDepth", "pictureType", "width", "height", "ok", "err" },
 			script = ""
-					// Fast path: when the BLP header says alphaDepth==0 the texture is
-					// fully opaque, so we don't need the JPEG's 4th component and can let
-					// the browser's native JPEG decoder (which runs on a background thread
-					// pool and can actually parallelise across preload pump workers) do
-					// the heavy lifting. The colours come back in BGRA-in-RGBA-slots
-					// convention, so an R/B swap restores RGB order before we ship to GL.
-					+ "if (alphaDepth === 0) {"
-					+ "  try {"
-					+ "    var jpeg0 = new Uint8Array(jpegBytes.buffer, jpegBytes.byteOffset, jpegBytes.byteLength);"
-					+ "    var canvas0 = (typeof OffscreenCanvas !== 'undefined')"
-					+ "      ? new OffscreenCanvas(width, height)"
-					+ "      : (function(){ var c = document.createElement('canvas'); c.width = width; c.height = height; return c; })();"
-					+ "    createImageBitmap(new Blob([jpeg0], { type: 'image/jpeg' }))"
-					+ "      .then(function(bitmap) {"
-					+ "        var ctx = canvas0.getContext('2d', { willReadFrequently: true });"
-					+ "        if (!ctx) { throw new Error('2d context unavailable'); }"
-					+ "        ctx.drawImage(bitmap, 0, 0, width, height);"
-					+ "        if (bitmap.close) { bitmap.close(); }"
-					+ "        var image = ctx.getImageData(0, 0, width, height);"
-					+ "        var data = image.data;"
-					+ "        var out0 = new Int8Array(data.length);"
-					+ "        for (var i = 0; i < data.length; i += 4) {"
-					+ "          var r = data[i], g = data[i + 1], b = data[i + 2];"
-					+ "          out0[i]     = (b > 127) ? (b - 256) : b;"
-					+ "          out0[i + 1] = (g > 127) ? (g - 256) : g;"
-					+ "          out0[i + 2] = (r > 127) ? (r - 256) : r;"
-					+ "          out0[i + 3] = -1;"  // 255 signed
-					+ "        }"
-					+ "        ok(out0);"
-					+ "      })"
-					+ "      .catch(function(e) { err(e && e.message ? e.message : String(e)); });"
-					+ "    return;"
-					+ "  } catch (e) { /* fall through to jpeg-js path */ }"
-					+ "}"
+					// Always use jpeg-js. Earlier this path had a fast branch for
+					// alphaDepth==0 that decoded via createImageBitmap + 2D canvas
+					// — but that path silently discards the JPEG's 4th component,
+					// and WC3's "transparent" foliage / waterfall / water BLPs are
+					// 4-channel JPEGs (BGRA) declared with alphaDepth=0 (the 0
+					// just means "no separate alpha-byte stream"; the alpha is
+					// already in the JPEG itself). Canvas-decoded textures came
+					// back fully opaque, which renders as black around tree leaves
+					// under blend mode. jpeg-js sees the 4 components and
+					// preserves alpha.
 					+ "try {"
 					+ "  if (!window['jpeg-js'] || !window['jpeg-js'].JpegImage) {"
 					+ "    err('jpeg-js library not loaded'); return;"
@@ -261,30 +255,15 @@ final class BrowserImageBridge {
 					+ "  };"
 					+ "  var x, y, j, r, g, b, a;"
 					+ "  if (comps === 4) {"
-					// 4-component WC3 JPEG BLP: components stored as B, G, R, A.
-					// But only use the 4th component as display alpha when the BLP header
-					// says alphaDepth > 0. If alphaDepth == 0, the 4th component is a
-					// team-color mask / padding / whatever the BLP tool left there — it
-					// is NOT display alpha, and treating it as such punches see-through
-					// holes in opaque texels (e.g. unit pauldrons).
-					+ "    var fourthIsAlpha = alphaDepth > 0;"
+					// 4-channel JPEG BLP: BGRA. Match the sync decoder:
+					// always use comp[3] as alpha. PictureType 5 inverts.
 					+ "    for (y = 0; y < height; y++) {"
 					+ "      for (x = 0; x < width; x++) {"
 					+ "        b = sampleComp(0, x, y);"
 					+ "        g = sampleComp(1, x, y);"
 					+ "        r = sampleComp(2, x, y);"
-					+ "        if (fourthIsAlpha) {"
-					+ "          a = sampleComp(3, x, y);"
-					+ "          if (pictureType === 5) { a = 255 - a; }"
-					+ "        } else if (hasSeparateAlpha) {"
-					// Rare: alphaDepth>0 but stored as trailing bytes (classic palette
-					// BLP convention, occasionally applied to JPEG BLPs). Only hit if
-					// the JPEG is 4-component AND the BLP also carries a separate
-					// alpha stream, which would be unusual. Handle for completeness.
-					+ "          a = decodeAlpha(y * width + x);"
-					+ "        } else {"
-					+ "          a = 255;"
-					+ "        }"
+					+ "        a = sampleComp(3, x, y);"
+					+ "        if (pictureType === 5) { a = 255 - a; }"
 					+ "        putRgba((y * width + x) * 4, r, g, b, a);"
 					+ "      }"
 					+ "    }"
