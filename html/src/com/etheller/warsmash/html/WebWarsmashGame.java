@@ -28,6 +28,14 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 
 	@Override
 	public void create() {
+		// Route stderr through stdout so DevTools stops attaching a (huge,
+		// TeaVM-translated) JS stack to every System.err.println. The engine
+		// uses System.err for ordinary status/warning text ("Loading TOC...",
+		// "DestroyGroup called but..."), which makes the console freeze
+		// formatting dozens of stacks on boot. Lose the err/out distinction —
+		// gain a usable console.
+		System.setErr(System.out);
+
 		status("Warsmash web boot");
 
 		ImageUtils.textureDecoder = new WebTextureDecoder();

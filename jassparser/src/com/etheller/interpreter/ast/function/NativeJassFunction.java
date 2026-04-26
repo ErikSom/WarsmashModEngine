@@ -1,6 +1,8 @@
 package com.etheller.interpreter.ast.function;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.etheller.interpreter.ast.debug.JassException;
 import com.etheller.interpreter.ast.scope.GlobalScope;
@@ -10,6 +12,13 @@ import com.etheller.interpreter.ast.value.JassValue;
 import com.etheller.interpreter.ast.value.visitor.JassTypeGettingValueVisitor;
 
 public class NativeJassFunction {
+	// Each unimplemented native is warned about exactly once per process. Without
+	// this, JASS code that calls e.g. CachePlayerHeroData per player (or per tick)
+	// floods the console; on the TeaVM/web build System.err routes to
+	// console.error which Chrome decorates with a stack trace, and DevTools
+	// freezes formatting them.
+	private static final Set<String> WARNED_MISSING_NATIVES = new HashSet<>();
+
 	private final List<JassParameter> parameters;
 	private final JassType returnType;
 	private final String name;
@@ -71,11 +80,11 @@ public class NativeJassFunction {
 
 	private boolean checkNativeExists() {
 		if (this.implementation == null) {
-			System.err.println(
-					"Call to native function that was declared but had no native implementation: " + this.name);
+			if (WARNED_MISSING_NATIVES.add(this.name)) {
+				System.out.println(
+						"Call to native function that was declared but had no native implementation: " + this.name);
+			}
 			return false;
-//			throw new UnsupportedOperationException(
-//					"Call to native function that was declared but had no native implementation: " + this.name);
 		}
 		return true;
 	}

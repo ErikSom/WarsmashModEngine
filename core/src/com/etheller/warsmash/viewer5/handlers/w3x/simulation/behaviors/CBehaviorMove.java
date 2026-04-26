@@ -251,10 +251,7 @@ public class CBehaviorMove implements CBehavior {
 							return this.unit.pollNextOrderBehavior(simulation);
 						}
 						else {
-							System.out.println(this.path);
-							final PathingPoint removed = this.path.remove(0);
-							System.out.println(
-									"We think we reached  " + removed + " because we are at " + nextX + "," + nextY);
+							this.path.remove(0);
 							final boolean emptyPath = this.path.isEmpty();
 							if (emptyPath) {
 								if (this.followUnit != null) {
@@ -283,8 +280,6 @@ public class CBehaviorMove implements CBehavior {
 								onMoveGiveUp(simulation);
 								return this.unit.pollNextOrderBehavior(simulation);
 							}
-							System.out.println("new target: " + currentTargetX + "," + currentTargetY);
-							System.out.println("new delta: " + deltaX + "," + deltaY);
 							goalAngleRad = Math.atan2(deltaY, deltaX);
 							goalAngle = (float) Math.toDegrees(goalAngleRad);
 							if (goalAngle < 0) {
@@ -428,7 +423,6 @@ public class CBehaviorMove implements CBehavior {
 		this.path = waypoints;
 		if (this.firstPathfindJob) {
 			this.firstPathfindJob = false;
-			System.out.println("init path " + this.path);
 			// check for smoothing
 			if (!this.path.isEmpty()) {
 				float lastX = startFloatingX;

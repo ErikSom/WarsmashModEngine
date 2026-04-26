@@ -92,10 +92,6 @@ public final class WebTextureDecoder implements TextureDecoder {
 		// because the {@code new Pixmap(pngBytes)} path is broken on TeaVM and would
 		// otherwise yield an all-black texture.
 		final RgbaImage cached = DecodedRgbaCache.take(path);
-		if ((path != null) && path.toLowerCase().contains("tree")) {
-			System.out.println("[rgba-lookup] " + path + " cacheHit=" + (cached != null)
-					+ " cacheSize=" + DecodedRgbaCache.size());
-		}
 		if (cached != null) {
 			return new DecodedImage(false, cached, cached);
 		}

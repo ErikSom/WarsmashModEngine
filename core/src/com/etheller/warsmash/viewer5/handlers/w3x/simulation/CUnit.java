@@ -487,9 +487,8 @@ public class CUnit extends CWidget {
 				buffKeyMap.get(buff.getStackingKey()).remove(buff);
 			}
 			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+				System.err.println("removeNonStackingStatBuff[" + getTypeId().asStringValue() + "]: "
+						+ e.getLocalizedMessage());
 			}
 
 			buffKeyMap = this.nonStackingBuffs.get(NonStackingStatBuffType.RNGDATK);
@@ -497,9 +496,8 @@ public class CUnit extends CWidget {
 				buffKeyMap.get(buff.getStackingKey()).remove(buff);
 			}
 			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+				System.err.println("removeNonStackingStatBuff[" + getTypeId().asStringValue() + "]: "
+						+ e.getLocalizedMessage());
 			}
 		}
 		else if (buff.getBuffType() == NonStackingStatBuffType.ALLATKPCT) {
@@ -509,9 +507,8 @@ public class CUnit extends CWidget {
 				buffKeyMap.get(buff.getStackingKey()).remove(buff);
 			}
 			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+				System.err.println("removeNonStackingStatBuff[" + getTypeId().asStringValue() + "]: "
+						+ e.getLocalizedMessage());
 			}
 
 			buffKeyMap = this.nonStackingBuffs.get(NonStackingStatBuffType.RNGDATKPCT);
@@ -519,9 +516,8 @@ public class CUnit extends CWidget {
 				buffKeyMap.get(buff.getStackingKey()).remove(buff);
 			}
 			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+				System.err.println("removeNonStackingStatBuff[" + getTypeId().asStringValue() + "]: "
+						+ e.getLocalizedMessage());
 			}
 		}
 		else {
@@ -530,9 +526,8 @@ public class CUnit extends CWidget {
 				buffKeyMap.get(buff.getStackingKey()).remove(buff);
 			}
 			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+				System.err.println("removeNonStackingStatBuff[" + getTypeId().asStringValue() + "]: "
+						+ e.getLocalizedMessage());
 			}
 		}
 		computeDerivedFields(buff.getBuffType());

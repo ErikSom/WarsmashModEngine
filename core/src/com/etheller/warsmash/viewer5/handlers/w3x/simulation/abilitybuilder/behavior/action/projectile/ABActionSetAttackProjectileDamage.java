@@ -24,7 +24,6 @@ public class ABActionSetAttackProjectileDamage implements ABSingleAction {
 
 		if ((proj != null) && (proj instanceof CAttackProjectile)) {
 			final float dm = this.damage.callback(game, caster, localStore, castId);
-			System.err.println("Setting proj damage from " + ((CAttackProjectile) proj).getDamage() + " to " + dm);
 			((CAttackProjectile) proj).setDamage(dm);
 		}
 	}
