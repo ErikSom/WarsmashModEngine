@@ -60,20 +60,43 @@ public final class WebExtensions {
 		Extensions.audio = new AudioExtension() {
 			@Override
 			public AudioContext createContext(final boolean world) {
+				// Listener.DO_NOTHING reports is3DSupported() == false, which
+				// makes AudioBufferSource skip the distance-attenuation gate
+				// and play every requested sound. Good default for now;
+				// upgrade to a real 3D listener (camera-derived) later.
 				return new AudioContext(Listener.DO_NOTHING, new AudioDestination() {
 				});
 			}
 
 			@Override
 			public float getDuration(final Sound sound) {
-				return 1f;
+				// libGDX Sound has no duration API. The only consumer
+				// today is UnitSound.playUnitResponse, which uses this to
+				// debounce repeated "Yes Sir" / "Ready" plays — 1.5 s is
+				// close enough to the typical unit-ack length to feel right.
+				return 1.5f;
 			}
 
 			@Override
 			public long play(final Sound buffer, final float volume, final float pitch, final float x, final float y,
 					final float z, final boolean is3DSound, final float maxDistance, final float refDistance,
 					final boolean looping) {
-				return -1L;
+				if (buffer == null) {
+					return -1L;
+				}
+				try {
+					// pan = 0 (stereo center). Real positional audio
+					// (camera-relative panning, distance attenuation) is a
+					// follow-up — most WC3 sounds sit fine at center pan
+					// and the distance cull already happens in the panner.
+					if (looping) {
+						return buffer.loop(volume, pitch, 0f);
+					}
+					return buffer.play(volume, pitch, 0f);
+				}
+				catch (final Throwable t) {
+					return -1L;
+				}
 			}
 		};
 		// Classic OpenGL polygon-mode constants; not exposed in WebGL, kept only

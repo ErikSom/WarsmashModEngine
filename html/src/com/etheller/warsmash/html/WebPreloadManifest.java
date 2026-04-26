@@ -15,10 +15,12 @@ final class WebPreloadManifest {
 			"buildings/",
 			"doodads/",
 			"environment/",
+			"music/",
 			"objects/",
 			"replaceabletextures/",
 			"scripts/",
 			"sharedmodels/",
+			"sound/",
 			"splats/",
 			"terrainart/",
 			"textures/",
@@ -78,13 +80,15 @@ final class WebPreloadManifest {
 	}
 
 	private static boolean isAudioOrVideo(final String lowerPath) {
-		return lowerPath.startsWith("music/")
-				|| lowerPath.startsWith("movies/")
-				|| lowerPath.startsWith("sound/")
-				|| lowerPath.endsWith(".flac")
-				|| lowerPath.endsWith(".mp3")
-				|| lowerPath.endsWith(".ogg")
-				|| lowerPath.endsWith(".wav");
+		// Movies are large and the engine has no video playback path, so we
+		// drop them from the preload to save tens of MB. Sound effects and
+		// music are kept — see WebExtensions.audio for the playback wiring
+		// that consumes them.
+		return lowerPath.startsWith("movies/")
+				|| lowerPath.endsWith(".avi")
+				|| lowerPath.endsWith(".mp4")
+				|| lowerPath.endsWith(".mpg")
+				|| lowerPath.endsWith(".mpeg");
 	}
 
 	private static boolean isMap(final String lowerPath) {
