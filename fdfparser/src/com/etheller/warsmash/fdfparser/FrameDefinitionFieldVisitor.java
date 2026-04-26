@@ -5,6 +5,7 @@ import com.etheller.warsmash.fdfparser.FDFParser.FlagElementContext;
 import com.etheller.warsmash.fdfparser.FDFParser.FloatElementContext;
 import com.etheller.warsmash.fdfparser.FDFParser.FontElementContext;
 import com.etheller.warsmash.fdfparser.FDFParser.FrameFrameElementContext;
+import com.etheller.warsmash.fdfparser.FDFParser.IdentifierPairElementContext;
 import com.etheller.warsmash.fdfparser.FDFParser.MenuItemElementContext;
 import com.etheller.warsmash.fdfparser.FDFParser.SetPointElementContext;
 import com.etheller.warsmash.fdfparser.FDFParser.SimpleFontElementContext;
@@ -166,6 +167,18 @@ public class FrameDefinitionFieldVisitor extends FDFBaseVisitor<Void> {
 	@Override
 	public Void visitFrameFrameElement(final FrameFrameElementContext ctx) {
 		this.frameDefinition.add(this.frameDefinitionVisitor.visit(ctx));
+		return null;
+	}
+
+	@Override
+	public Void visitIdentifierPairElement(final IdentifierPairElementContext ctx) {
+		// FDF property whose value is a bare keyword identifier
+		// (e.g. `AlphaMode BLEND,`, `BlendMode ADD,`). Persist as a
+		// String field — downstream consumers that want a typed enum
+		// can parse the string themselves; today's renderer doesn't
+		// hard-fail on missing alpha-mode wiring, just falls back to
+		// the default blend mode.
+		this.frameDefinition.set(ctx.ID(0).getText(), new StringFrameDefinitionField(ctx.ID(1).getText()));
 		return null;
 	}
 }

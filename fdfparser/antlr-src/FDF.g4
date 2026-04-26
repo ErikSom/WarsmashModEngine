@@ -46,7 +46,7 @@ frame:
 	FRAME STRING_LITERAL STRING_LITERAL INHERITS WITHCHILDREN STRING_LITERAL OPEN_CURLY frame_element* CLOSE_CURLY # FrameSubTypeDefinitionWithChildren
 	;
 	
-frame_element: 
+frame_element:
 	frame # FrameFrameElement
 	|
 	ID FLOAT COMMA # FloatElement
@@ -61,7 +61,11 @@ frame_element:
 	|
 	ID FLOAT FLOAT FLOAT FLOAT COMMA # Vector4Element
 	|
-	ID FLOAT COMMA FLOAT COMMA FLOAT COMMA FLOAT COMMA # Vector4CommaElement
+	// Trailing comma is optional — real WC3 FDFs (e.g. ConsoleUI.fdf's
+	// `TexCoord 0, 1, 0, 0.125`) sometimes omit it. Without this the
+	// parser keeps looking for the terminator and blames the next
+	// element's identifier (e.g. "missing ',' at 'AlphaMode'").
+	ID FLOAT COMMA FLOAT COMMA FLOAT COMMA FLOAT COMMA? # Vector4CommaElement
 	|
 	SETPOINT frame_point COMMA STRING_LITERAL COMMA frame_point COMMA FLOAT COMMA FLOAT COMMA # SetPointElement
 	|
@@ -76,6 +80,13 @@ frame_element:
 	ID STRING_LITERAL COMMA FLOAT COMMA # SimpleFontElement
 	|
 	MENUITEM STRING_LITERAL COMMA FLOAT COMMA # MenuItemElement
+	|
+	// Catches FDF properties whose value is an unquoted keyword identifier
+	// (e.g. `AlphaMode BLEND,`, `BlendMode ADD,`). Without this rule the
+	// parser fails on real WC3 ConsoleUI.fdf / sprite-layer FDFs and any
+	// downstream frame definitions go unparsed — visible as empty
+	// dropdowns and missing alpha on tree/waterfall sprites.
+	ID ID COMMA # IdentifierPairElement
 	;
 	
 text_justify:
