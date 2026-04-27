@@ -313,7 +313,7 @@ public class Jass2 {
 		return environment;
 	}
 
-	private static void readJassFile(final DataSource dataSource, final JassProgram jassProgramVisitor,
+	static void readJassFile(final DataSource dataSource, final JassProgram jassProgramVisitor,
 			final String jassFilePath) {
 		final String jassFile = jassFilePath;
 		try {
@@ -10552,10 +10552,16 @@ public class Jass2 {
 		jassProgramVisitor.getJassNativeManager().createNative("GetLocalizedString",
 				(arguments, globalScope, triggerScope) -> {
 					final String key = arguments.get(0).visit(StringJassValueVisitor.getInstance());
-					// TODO this might be wrong, or a subset of the needed return values
+					// Map-specific WTS strings (TRIGSTR_NNNN) come from
+					// the loaded war3map.wts; FDF templates handle the rest
+					// (WESTRING_*, etc.). Going through the FDF path for a
+					// TRIGSTR_ key always misses.
+					if (key.startsWith("TRIGSTR_")) {
+						return new StringJassValue(gameUI.getTrigStr(key));
+					}
 					final String decoratedString = gameUI.getTemplates().getDecoratedString(key);
 					if (key.equals(decoratedString)) {
-						System.err.println("GetLocalizedString: NOT FOUND: " + key);
+						System.out.println("GetLocalizedString: NOT FOUND: " + key);
 					}
 					return new StringJassValue(decoratedString);
 				});

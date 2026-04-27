@@ -58,6 +58,48 @@
 		#summary { color: #c8d8f1; font-size: 13px; text-align: center; max-width: 560px; line-height: 1.5; }
 		#status { color: #999; font-size: 13px; min-height: 18px; text-align: center; max-width: 560px; }
 		#error { color: #f66; font-size: 13px; text-align: center; max-width: 560px; }
+		#maps-modal {
+			position: fixed; inset: 0; z-index: 100;
+			background: rgba(0, 0, 0, 0.75);
+			display: flex; align-items: center; justify-content: center;
+			padding: 24px;
+		}
+		.maps-panel {
+			background: #1a2233; border: 1px solid #2a3a52; border-radius: 6px;
+			width: 100%; max-width: 720px; max-height: 100%;
+			display: flex; flex-direction: column;
+			box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+		}
+		.maps-header {
+			display: flex; align-items: center; justify-content: space-between;
+			padding: 14px 18px; border-bottom: 1px solid #2a3a52;
+		}
+		.maps-title { font-size: 16px; font-weight: 500; }
+		.maps-actions {
+			display: flex; align-items: center; gap: 12px;
+			padding: 12px 18px; border-bottom: 1px solid #2a3a52;
+		}
+		#maps-info { color: #99a8c2; font-size: 13px; }
+		#maps-list {
+			flex: 1; overflow-y: auto; padding: 10px 18px; min-height: 100px;
+		}
+		#maps-list .group-header {
+			color: #c8d8f1; font-size: 12px; text-transform: uppercase;
+			letter-spacing: 0.5px; margin: 10px 0 6px;
+		}
+		#maps-list .group-header:first-child { margin-top: 0; }
+		#maps-list .row-item {
+			display: flex; align-items: center; justify-content: space-between;
+			gap: 8px; padding: 6px 10px; border-radius: 3px; background: #20293c;
+			margin-bottom: 3px; font-size: 13px;
+		}
+		#maps-list .name { color: #ddd; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		#maps-list .path { color: #6a7a93; font-size: 11px; margin-left: 8px; }
+		#maps-list button {
+			background: #5a2828; padding: 4px 10px; font-size: 12px; line-height: 1;
+		}
+		#maps-list .empty { color: #777; text-align: center; padding: 30px 10px; }
+		#maps-error { color: #f66; font-size: 13px; padding: 0 18px 14px; }
 	</style>
 </head>
 <body oncontextmenu="return false">
@@ -70,12 +112,29 @@
 			<label class="fakebtn" for="dir-input">Select Warcraft III folder</label>
 			<input id="dir-input" type="file" webkitdirectory multiple style="display:none">
 			<button id="start-btn" style="display:none">Start extraction and engine</button>
+			<button id="manage-maps-btn" class="secondary" style="display:none">Manage maps</button>
 			<button id="reset-btn" class="secondary" style="display:none">Clear cached assets</button>
 		</div>
 		<div id="progress"><div id="progress-bar"></div></div>
 		<div id="summary"></div>
 		<div id="status"></div>
 		<div id="error"></div>
+	</div>
+
+	<div id="maps-modal" style="display:none">
+		<div class="maps-panel">
+			<div class="maps-header">
+				<div class="maps-title">Manage maps</div>
+				<button id="maps-close-btn" class="secondary">Close</button>
+			</div>
+			<div class="maps-actions">
+				<label class="fakebtn" for="add-maps-input">Add maps</label>
+				<input id="add-maps-input" type="file" accept=".w3x,.w3m" multiple style="display:none">
+				<span id="maps-info"></span>
+			</div>
+			<div id="maps-list"></div>
+			<div id="maps-error"></div>
+		</div>
 	</div>
 
 	<div id="canvas-wrap"><canvas id="canvas"></canvas></div>
@@ -141,6 +200,156 @@
 			localStorage.removeItem(READY_KEY);
 			localStorage.removeItem(COUNT_KEY);
 			localStorage.removeItem(INDEX_KEY);
+		}
+
+		// User-uploaded maps live under /extracted/Maps/Upload/; the engine's
+		// WebMapBootScreen enumerates /extracted/ recursively for *.w3x/*.w3m.
+		// "Stock" maps come from the MPQ extraction worker and live under other
+		// subdirectories of /extracted/Maps/ (FrozenThrone, etc.). The Manage
+		// Maps panel walks /extracted/Maps/ recursively, so it shows every map
+		// the engine would find, not just the user-added ones.
+		const UPLOAD_DIR_PARTS = ['Maps', 'Upload'];
+
+		async function getExtractedRoot(create = false) {
+			const root = await navigator.storage.getDirectory();
+			return await root.getDirectoryHandle('extracted', { create });
+		}
+
+		async function getDirByParts(parts, create = false) {
+			let dir = await getExtractedRoot(create);
+			for (const p of parts) {
+				dir = await dir.getDirectoryHandle(p, { create });
+			}
+			return dir;
+		}
+
+		async function listAllMaps() {
+			let mapsRoot;
+			try {
+				mapsRoot = await getDirByParts(['Maps'], false);
+			}
+			catch (e) {
+				return [];
+			}
+			const out = [];
+			async function walk(dir, parts) {
+				for await (const [name, handle] of dir.entries()) {
+					if (handle.kind === 'directory') {
+						await walk(handle, parts.concat(name));
+					}
+					else {
+						const lower = name.toLowerCase();
+						if (lower.endsWith('.w3x') || lower.endsWith('.w3m')) {
+							const isUpload = parts[0] === UPLOAD_DIR_PARTS[1];
+							out.push({
+								name,
+								dirParts: parts,
+								// path relative to /extracted/Maps/, with forward slashes
+								relPath: parts.concat(name).join('/'),
+								isUpload,
+							});
+						}
+					}
+				}
+			}
+			await walk(mapsRoot, []);
+			out.sort((a, b) => {
+				// Uploaded maps first, then alphabetical by relative path.
+				if (a.isUpload !== b.isUpload) return a.isUpload ? -1 : 1;
+				return a.relPath.localeCompare(b.relPath);
+			});
+			return out;
+		}
+
+		async function addUploadedMaps(files) {
+			const dir = await getDirByParts(['Maps'].concat(UPLOAD_DIR_PARTS.slice(1)), true);
+			let written = 0;
+			for (const f of files) {
+				const lower = f.name.toLowerCase();
+				if (!lower.endsWith('.w3x') && !lower.endsWith('.w3m')) continue;
+				const safe = sanitizeFileName(f.name);
+				const handle = await dir.getFileHandle(safe, { create: true });
+				const writable = await handle.createWritable();
+				await writable.write(f);
+				await writable.close();
+				written++;
+			}
+			return written;
+		}
+
+		async function removeMapByEntry(entry) {
+			const dir = await getDirByParts(['Maps'].concat(entry.dirParts), false);
+			await dir.removeEntry(entry.name);
+		}
+
+		function setMapsError(m) {
+			el('maps-error').textContent = m || '';
+		}
+
+		function escapeHtml(s) {
+			return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+		}
+
+		async function renderMapList() {
+			const container = el('maps-list');
+			setMapsError('');
+			let entries;
+			try {
+				entries = await listAllMaps();
+			}
+			catch (err) {
+				setMapsError('Failed to list maps: ' + (err && err.message ? err.message : err));
+				container.innerHTML = '';
+				el('maps-info').textContent = '';
+				return;
+			}
+			el('maps-info').textContent = entries.length
+				? `${entries.length} map${entries.length === 1 ? '' : 's'}`
+				: '';
+			if (!entries.length) {
+				container.innerHTML = '<div class="empty">No maps found in /extracted/Maps/.</div>';
+				return;
+			}
+			const uploaded = entries.filter(e => e.isUpload);
+			const stock = entries.filter(e => !e.isUpload);
+			const sectionFor = (label, items) => {
+				if (!items.length) return '';
+				const header = `<div class="group-header">${escapeHtml(label)} (${items.length})</div>`;
+				const rows = items.map((entry, i) => {
+					const idx = entries.indexOf(entry);
+					const subdir = entry.dirParts.length ? entry.dirParts.join('/') + '/' : '';
+					return `<div class="row-item">`
+						+ `<span class="name">${escapeHtml(entry.name)}`
+						+ `<span class="path">${escapeHtml(subdir)}</span></span>`
+						+ `<button data-idx="${idx}">Remove</button>`
+						+ `</div>`;
+				}).join('');
+				return header + rows;
+			};
+			container.innerHTML = sectionFor('Uploaded', uploaded) + sectionFor('Stock', stock);
+			for (const btn of container.querySelectorAll('button[data-idx]')) {
+				btn.addEventListener('click', async () => {
+					const entry = entries[Number(btn.getAttribute('data-idx'))];
+					try {
+						await removeMapByEntry(entry);
+						await renderMapList();
+					}
+					catch (err) {
+						setMapsError('Remove failed: ' + (err && err.message ? err.message : err));
+					}
+				});
+			}
+		}
+
+		function openMapsModal() {
+			el('maps-modal').style.display = '';
+			renderMapList();
+		}
+
+		function closeMapsModal() {
+			el('maps-modal').style.display = 'none';
+			setMapsError('');
 		}
 
 		function readIndex() {
@@ -210,6 +419,10 @@
 			el('resume-btn').style.display = (!engineStarted && !uploadSessionDirty && hasAssets) ? '' : 'none';
 			el('resume-btn').disabled = !hasMap;
 			el('reset-btn').style.display = hasAssets ? '' : 'none';
+			// Manage Maps only makes sense once the install is staged — the
+			// engine reads /extracted/, which is populated by the MPQ
+			// extraction worker.
+			el('manage-maps-btn').style.display = (!engineStarted && hasAssets) ? '' : 'none';
 			// When cached assets exist, "Play game" is the obvious primary action;
 			// demote the folder-pick label to a secondary style so re-uploading the
 			// install reads as a fallback rather than the headline action.
@@ -406,6 +619,33 @@
 				await clearOpfs();
 				uploadSessionDirty = false;
 				location.reload();
+			});
+			el('manage-maps-btn').addEventListener('click', openMapsModal);
+			el('maps-close-btn').addEventListener('click', closeMapsModal);
+			el('maps-modal').addEventListener('click', (e) => {
+				// Close when clicking the dark backdrop (but not the panel itself).
+				if (e.target === el('maps-modal')) closeMapsModal();
+			});
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape' && el('maps-modal').style.display !== 'none') {
+					closeMapsModal();
+				}
+			});
+			el('add-maps-input').addEventListener('change', async (e) => {
+				const files = Array.from(e.target.files || []);
+				e.target.value = '';
+				if (!files.length) return;
+				setMapsError('');
+				try {
+					const written = await addUploadedMaps(files);
+					if (!written) {
+						setMapsError('No .w3x or .w3m files in selection.');
+					}
+					await renderMapList();
+				}
+				catch (err) {
+					setMapsError('Add maps failed: ' + (err && err.message ? err.message : err));
+				}
 			});
 		}
 

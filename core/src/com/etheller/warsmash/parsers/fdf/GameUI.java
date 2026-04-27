@@ -1664,7 +1664,21 @@ public final class GameUI extends AbstractUIFrame implements UIFrame, SkinResolv
 
 	public String getTrigStr(String errorString) {
 		if (errorString.startsWith("TRIGSTR_")) {
-			errorString = this.mapStrings.get(Integer.parseInt(errorString.substring(8)));
+			// Parse just the leading digits — JASS occasionally hands us
+			// strings like "TRIGSTR_4781 |r]" where the index is followed
+			// by a colour-reset code or other trailing content. Splitting
+			// on the digit boundary lets us look up the WTS entry for the
+			// numeric part and preserve the suffix verbatim.
+			int end = 8;
+			while ((end < errorString.length()) && Character.isDigit(errorString.charAt(end))) {
+				end++;
+			}
+			if ((end > 8) && (this.mapStrings != null)) {
+				final String resolved = this.mapStrings.get(Integer.parseInt(errorString.substring(8, end)));
+				if (resolved != null) {
+					return resolved + errorString.substring(end);
+				}
+			}
 		}
 		return errorString;
 	}

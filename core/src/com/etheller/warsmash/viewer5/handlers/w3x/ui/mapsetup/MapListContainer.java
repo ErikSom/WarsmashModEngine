@@ -33,7 +33,17 @@ public class MapListContainer {
 			}
 		}
 		for (final String displayItemPath : displayItemPaths) {
-			this.mapListBox.addItem(displayItemPath, ListItemEnum.ITEM_MAP, rootFrame, uiViewport);
+			try {
+				this.mapListBox.addItem(displayItemPath, ListItemEnum.ITEM_MAP, rootFrame, uiViewport);
+			}
+			catch (final RuntimeException e) {
+				// Reading a map's W3I / WTS to populate the list item can throw
+				// (corrupt MPQ, unsupported format, encoding quirks). Skip the
+				// bad map but keep populating — without this, one bad map would
+				// hide every map listed after it in {@code displayItemPaths}.
+				System.out.println("[mapList] skipping " + displayItemPath + ": "
+						+ e.getClass().getSimpleName() + ": " + e.getMessage());
+			}
 		}
 		this.mapListBox.sortItems();
 		this.mapListContainer.add(this.mapListBox);

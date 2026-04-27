@@ -1172,6 +1172,7 @@ public class MenuUI {
 						war3MapConfig.setMapDescription("NOTEXTERN: default description string");
 						Jass2.loadConfig(map, MenuUI.this.uiViewport, MenuUI.this.uiScene, MenuUI.this.rootFrame,
 								war3MapConfig, WarsmashConstants.JASS_FILE_LIST).config();
+						final int realPlayerCount = mapInfo.getPlayers().size();
 						boolean foundFirstHuman = false;
 						boolean foundFirstComp = false;
 						for (int i = 0; i < WarsmashConstants.MAX_PLAYERS; i++) {
@@ -1181,6 +1182,18 @@ public class MenuUI {
 									player.setSlotState(CPlayerSlotState.PLAYING);
 									player.setName(MenuUI.this.profileManager.getCurrentProfile());
 									foundFirstHuman = true;
+								}
+								else if (i < realPlayerCount) {
+									// Default subsequent USER slots that map to a real
+									// start location to AI. Otherwise a melee map with
+									// the lobby left at defaults has no opponents and
+									// Blizzard.j's MeleeCheckForVictoriesAndDefeats fires
+									// Victory at t=0. The lobby UI still lets the user
+									// override any slot (Open / Closed / Computer
+									// difficulty) before Play Game.
+									player.setController(CMapControl.COMPUTER);
+									player.setSlotState(CPlayerSlotState.PLAYING);
+									player.setAIDifficulty(AIDifficulty.NORMAL);
 								}
 							}
 							else if (player.getController() == CMapControl.COMPUTER) {
