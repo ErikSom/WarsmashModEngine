@@ -6,7 +6,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Sound;
@@ -336,13 +338,19 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 				}
 			}
 			else {
-				System.err.println("Unknown event object type: " + this.type + this.id);
+				if (WARNED_UNKNOWN_EVENTS.add(this.type + this.id)) {
+					System.out.println("Unknown event object type: " + this.type + this.id);
+				}
 			}
 		}
 		else {
-			System.err.println("Unknown event object ID: " + this.type + this.id);
+			if (WARNED_UNKNOWN_EVENTS.add(this.type + this.id)) {
+				System.out.println("Unknown event object ID: " + this.type + this.id);
+			}
 		}
 	}
+
+	private static final Set<String> WARNED_UNKNOWN_EVENTS = new HashSet<>();
 
 	public int getValue(final long[] out, final MdxComplexInstance instance) {
 		if (this.globalSequence != -1) {

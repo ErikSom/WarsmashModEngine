@@ -75,7 +75,18 @@ public class NativeJassFunction {
 		if (!checkNativeExists()) {
 			return this.returnType.getNullValue();
 		}
-		return this.implementation.call(arguments, globalScope, triggerScope);
+		try {
+			return this.implementation.call(arguments, globalScope, triggerScope);
+		}
+		catch (final JassException e) {
+			throw e;
+		}
+		catch (final Throwable e) {
+			final Exception cause = (e instanceof Exception) ? (Exception) e : new RuntimeException(e);
+			throw new JassException(globalScope,
+					"Native '" + this.name + "' crashed: " + e.getClass().getSimpleName() + ": " + e.getMessage(),
+					cause);
+		}
 	}
 
 	private boolean checkNativeExists() {

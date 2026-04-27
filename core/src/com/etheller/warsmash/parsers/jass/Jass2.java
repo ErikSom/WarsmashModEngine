@@ -2053,17 +2053,24 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("DialogSetMessage",
 					(arguments, globalScope, triggerScope) -> {
 						final CScriptDialog dialog = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-						final String messageText = arguments.get(1).visit(StringJassValueVisitor.getInstance());
+						String messageText = arguments.get(1).visit(StringJassValueVisitor.getInstance());
+						if ((messageText != null) && (CommonEnvironment.this.gameUI != null)) {
+							messageText = CommonEnvironment.this.gameUI.getTrigStr(messageText);
+						}
 						dialog.setTitle(CommonEnvironment.this.gameUI, messageText);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("DialogAddButton",
 					(arguments, globalScope, triggerScope) -> {
 						final CScriptDialog dialog = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-						final String buttonText = arguments.get(1).visit(StringJassValueVisitor.getInstance());
+						String buttonText = arguments.get(1).visit(StringJassValueVisitor.getInstance());
 						final int hotkeyInt = arguments.get(2).visit(IntegerJassValueVisitor.getInstance());
-						meleeUI.createScriptDialogButton(dialog, buttonText, (char) hotkeyInt);
-						return null;
+						if ((buttonText != null) && (CommonEnvironment.this.gameUI != null)) {
+							buttonText = CommonEnvironment.this.gameUI.getTrigStr(buttonText);
+						}
+						final CScriptDialogButton button = meleeUI.createScriptDialogButton(dialog, buttonText,
+								(char) hotkeyInt);
+						return new HandleJassValue(buttonType, button);
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("DialogDisplay",
 					(arguments, globalScope, triggerScope) -> {
@@ -2077,8 +2084,13 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterDialogEvent",
 					(arguments, globalScope, triggerScope) -> {
-						final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-						final CScriptDialog dialog = arguments.get(1).visit(ObjectJassValueVisitor.getInstance());
+						final JassValue triggerArg = arguments.get(0);
+						final JassValue dialogArg = arguments.get(1);
+						if ((triggerArg == null) || (dialogArg == null)) {
+							return eventType.getNullValue();
+						}
+						final Trigger trigger = triggerArg.visit(ObjectJassValueVisitor.getInstance());
+						final CScriptDialog dialog = dialogArg.visit(ObjectJassValueVisitor.getInstance());
 						if (dialog == null) {
 							return eventType.getNullValue();
 						}
@@ -2086,9 +2098,13 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterDialogButtonEvent",
 					(arguments, globalScope, triggerScope) -> {
-						final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-						final CScriptDialogButton dialogButton = arguments.get(1)
-								.visit(ObjectJassValueVisitor.getInstance());
+						final JassValue triggerArg = arguments.get(0);
+						final JassValue buttonArg = arguments.get(1);
+						if ((triggerArg == null) || (buttonArg == null)) {
+							return eventType.getNullValue();
+						}
+						final Trigger trigger = triggerArg.visit(ObjectJassValueVisitor.getInstance());
+						final CScriptDialogButton dialogButton = buttonArg.visit(ObjectJassValueVisitor.getInstance());
 						if (dialogButton == null) {
 							return eventType.getNullValue();
 						}

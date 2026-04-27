@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.TreeSet;
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -30,6 +29,7 @@ import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitClassification;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRace;
@@ -93,12 +93,9 @@ public final class JassAiPreload {
 	 */
 	public static GlobalScope preload(final DataSource dataSource, final CSimulation simulation) {
 		final List<String> aiPaths = findAiFiles(dataSource);
-		System.out.println("[ai-preload] discovered " + aiPaths.size() + " .ai file(s)");
 		if (aiPaths.isEmpty()) {
+			System.out.println("[ai-preload] no .ai files found in data source");
 			return null;
-		}
-		for (final String p : aiPaths) {
-			System.out.println("[ai-preload]   " + p);
 		}
 
 		final JassProgram program = new JassProgram();
@@ -136,7 +133,6 @@ public final class JassAiPreload {
 				failed++;
 			}
 		}
-		System.out.println("[ai-preload] parsed=" + parsed + " failed=" + failed);
 
 		// Custom initializer that mirrors {@link JassProgram#initialize()}
 		// but catches per-block failures so a single broken function in
@@ -145,26 +141,25 @@ public final class JassAiPreload {
 		// attribute it precisely.
 		initialiseTolerant(program);
 
-		reportNativeDeclarations(program);
 
-		dumpUserFunctions(globals);
 
-		// Try a small set of candidate entry-function names that WC3 AI
-		// scripts have used historically. {@code main} is the convention
-		// for melee scripts; campaign scripts sometimes use other names
-		// (often the race name). The dump above lets us see which one
-		// each script actually exposes when this list misses.
+		// Try a small set of candidate entry-function names. {@code main}
+		// is the convention for race-melee scripts; campaign scripts
+		// sometimes use the race name instead.
 		final String[] candidates = { "main", "human", "orc", "elf", "undead" };
+		String entry = null;
 		for (final String candidate : candidates) {
 			final Integer ptr = globals.getUserFunctionInstructionPtr(candidate);
 			if (ptr != null) {
-				final JassThread thread = globals.createThread(ptr);
-				globals.queueThread(thread);
-				System.out.println("[ai-preload] queued " + candidate + "() thread");
-				return globals;
+				globals.queueThread(globals.createThread(ptr));
+				entry = candidate;
+				break;
 			}
 		}
-		System.out.println("[ai-preload] no recognised entry function in parsed AI scripts");
+		System.out.println("[ai-preload] " + parsed + "/" + aiPaths.size() + " files, "
+				+ globals.getUserFunctionNames().size() + " fns, "
+				+ program.getJassNativeManager().getRegisteredNativeNames().size() + " natives, entry="
+				+ (entry == null ? "<none>" : entry + "()"));
 		return globals;
 	}
 
@@ -245,15 +240,6 @@ public final class JassAiPreload {
 			return "fn '" + code.getName() + "' at " + code.getSourceFile() + ":" + code.getLineNo();
 		}
 		return block.getClass().getSimpleName();
-	}
-
-	private static void dumpUserFunctions(final GlobalScope globals) {
-		final TreeSet<String> sorted = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-		sorted.addAll(globals.getUserFunctionNames());
-		System.out.println("[ai-preload] " + sorted.size() + " user functions registered:");
-		for (final String name : sorted) {
-			System.out.println("[ai-preload]   fn " + name);
-		}
 	}
 
 	/**
@@ -550,6 +536,26 @@ public final class JassAiPreload {
 		program.getJassNativeManager().createNative("GetUpgradeWoodCost",
 				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(0));
 
+		// {@code HarvestGold(numPeons, ...)} — assign up to N idle peons
+		// to the nearest gold mine. The script's full signature is
+		// {@code (numPeons, time)} but we ignore {@code time} for now;
+		// repeated calls (the AI's main loop pokes this every cycle) keep
+		// the count topped up as peons die or get pulled off. Returns
+		// nothing.
+		program.getJassNativeManager().createNative("HarvestGold", (arguments, globalScope, triggerScope) -> {
+			final int desired = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+			assignToGold(simulation, findFirstComputerPlayer(simulation), desired);
+			return null;
+		});
+		// {@code HarvestWood(numPeons, ...)} — same shape, but routed to
+		// the nearest tree. Each peon's own {@code CAbilityHarvest}
+		// resolves the chop target via the existing engine helper.
+		program.getJassNativeManager().createNative("HarvestWood", (arguments, globalScope, triggerScope) -> {
+			final int desired = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+			assignToWood(simulation, findFirstComputerPlayer(simulation), desired);
+			return null;
+		});
+
 		// Debug-print natives — script-side {@code DisplayText("...")},
 		// {@code DisplayTextI("fmt", x)}, etc. Stubbed silent so the
 		// console isn't drowned in AI debug output. Echo to stdout when
@@ -754,6 +760,98 @@ public final class JassAiPreload {
 						com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty.VALUES[1]));
 	}
 
+	/**
+	 * Assign up to {@code desiredCount} of the AI's idle peons to harvest
+	 * gold. Mirrors the player-side flow: find the worker's nearest mine
+	 * via {@link CBehaviorReturnResources#findNearestMine} and issue an
+	 * {@link OrderIds#harvest} order. Already-harvesting peons are
+	 * skipped; if the count is already met, nothing happens.
+	 */
+	private static void assignToGold(final CSimulation simulation, final CPlayer player, final int desiredCount) {
+		if ((player == null) || (desiredCount <= 0)) {
+			return;
+		}
+		int assigned = 0;
+		for (final CUnit unit : simulation.getUnits()) {
+			if (assigned >= desiredCount) {
+				break;
+			}
+			if (!isHarvestablePeon(unit, player) || isAlreadyOnGold(unit)) {
+				continue;
+			}
+			final CUnit mine = com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorReturnResources
+					.findNearestMine(unit, simulation);
+			if ((mine != null) && unit.order(simulation, com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds.harvest, mine)) {
+				assigned++;
+			}
+		}
+	}
+
+	/**
+	 * Assign up to {@code desiredCount} of the AI's idle peons to harvest
+	 * wood. Each peon's own {@link com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest}
+	 * resolves the closest tree (uses the existing helper, which respects
+	 * the targets-allowed mask).
+	 */
+	private static void assignToWood(final CSimulation simulation, final CPlayer player, final int desiredCount) {
+		if ((player == null) || (desiredCount <= 0)) {
+			return;
+		}
+		int assigned = 0;
+		for (final CUnit unit : simulation.getUnits()) {
+			if (assigned >= desiredCount) {
+				break;
+			}
+			if (!isHarvestablePeon(unit, player) || isAlreadyOnWood(unit)) {
+				continue;
+			}
+			final com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest harvest = findHarvest(unit);
+			if (harvest == null) {
+				continue;
+			}
+			final com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable tree = com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorReturnResources
+					.findNearestTree(unit, harvest, simulation, unit);
+			if ((tree != null) && unit.order(simulation, com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds.harvest, tree)) {
+				assigned++;
+			}
+		}
+	}
+
+	private static boolean isHarvestablePeon(final CUnit unit, final CPlayer player) {
+		if (unit.getPlayerIndex() != player.getId()) {
+			return false;
+		}
+		if (unit.isDead() || unit.isBuilding()) {
+			return false;
+		}
+		return unit.getClassifications().contains(CUnitClassification.PEON);
+	}
+
+	private static boolean isAlreadyOnGold(final CUnit unit) {
+		final com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior beh = unit.getCurrentBehavior();
+		if (beh == null) {
+			return false;
+		}
+		final int order = beh.getHighlightOrderId();
+		return order == com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds.harvest
+				|| order == com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds.returnresources;
+	}
+
+	private static boolean isAlreadyOnWood(final CUnit unit) {
+		// Same heuristic as gold for now — both share OrderIds.harvest.
+		return isAlreadyOnGold(unit);
+	}
+
+	private static com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest findHarvest(
+			final CUnit unit) {
+		for (final com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility a : unit.getAbilities()) {
+			if (a instanceof com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest) {
+				return (com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest) a;
+			}
+		}
+		return null;
+	}
+
 	private static CPlayer findFirstComputerPlayer(final CSimulation simulation) {
 		for (int i = 0; i < com.etheller.warsmash.util.WarsmashConstants.MAX_PLAYERS; i++) {
 			final CPlayer p = simulation.getPlayer(i);
@@ -864,12 +962,4 @@ public final class JassAiPreload {
 		return matches;
 	}
 
-	private static void reportNativeDeclarations(final JassProgram program) {
-		final TreeSet<String> sorted = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-		sorted.addAll(program.getJassNativeManager().getRegisteredNativeNames());
-		System.out.println("[ai-preload] " + sorted.size() + " distinct native declarations in parsed AI scripts:");
-		for (final String name : sorted) {
-			System.out.println("[ai-preload]   native " + name);
-		}
-	}
 }
