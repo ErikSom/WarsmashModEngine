@@ -1,5 +1,6 @@
 package com.etheller.interpreter.ast.function;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -41,5 +42,11 @@ public class JassNativeManager {
 
 	public void checkUnregisteredNatives() {
 		// TODO maybe do this later
+	}
+
+	/** Names of every {@code native} declaration that's been registered.
+	 *  Read-only view; used by diagnostic dumps. */
+	public Set<String> getRegisteredNativeNames() {
+		return Collections.unmodifiableSet(this.registeredNativeNames);
 	}
 }

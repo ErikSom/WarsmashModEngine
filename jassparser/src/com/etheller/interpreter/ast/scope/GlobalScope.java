@@ -395,6 +395,12 @@ public final class GlobalScope {
 		return this.functionNameToInstructionPtr.get(name);
 	}
 
+	/** Snapshot of all user-defined function names registered in this scope.
+	 *  Iterating order is not stable; copy + sort if you need determinism. */
+	public java.util.Set<String> getUserFunctionNames() {
+		return java.util.Collections.unmodifiableSet(this.functionNameToInstructionPtr.keySet());
+	}
+
 	public Integer getNativeId(final String name) {
 		return this.functionNameToNativeId.get(name);
 	}

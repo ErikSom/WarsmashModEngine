@@ -1,6 +1,7 @@
 package com.etheller.interpreter.ast.value.visitor;
 
 import com.etheller.interpreter.ast.expression.ArithmeticSign;
+import com.etheller.interpreter.ast.expression.ArithmeticSigns;
 import com.etheller.interpreter.ast.value.ArrayJassValue;
 import com.etheller.interpreter.ast.value.BooleanJassValue;
 import com.etheller.interpreter.ast.value.CodeJassValue;
@@ -32,7 +33,31 @@ public class ArithmeticLeftHandHandleJassValueVisitor implements JassValueVisito
 
 	@Override
 	public JassValue accept(final IntegerJassValue value) {
-		throw new UnsupportedOperationException("Cannot perform handle comparison on integer");
+		// Some Blizzard scripts (notably stock {@code undead.ai}'s
+		// "set trace_on = GetAiPlayer()==1" debug toggle) compare a handle
+		// to an integer literal. WC3's interpreter tolerates this and
+		// resolves it as never-equal — the dev presumably wanted the line
+		// to evaluate {@code false} so trace stays off. Match that
+		// behaviour for {@code ==} / {@code !=} so we don't crash on
+		// type-loose comparisons. Other operators on these mixed types
+		// have no sensible meaning and still throw with diagnostic info.
+		if (this.sign == ArithmeticSigns.EQUALS) {
+			return BooleanJassValue.of(false);
+		}
+		if (this.sign == ArithmeticSigns.NOT_EQUALS) {
+			return BooleanJassValue.of(true);
+		}
+		throw new UnsupportedOperationException("Cannot perform handle arithmetic on integer: lhs="
+				+ describeLeft() + " op=" + this.sign + " rhs=" + value.getValue());
+	}
+
+	private String describeLeft() {
+		if (this.leftHand == null) {
+			return "<null lhs>";
+		}
+		final Object java = this.leftHand.getJavaValue();
+		final String typeName = (this.leftHand.getType() == null) ? "<no-type>" : this.leftHand.getType().getName();
+		return "handle<" + typeName + ">(" + (java == null ? "null" : java.getClass().getSimpleName()) + ")";
 	}
 
 	@Override
