@@ -22,6 +22,13 @@ task buildWorker(dependsOn: classes, type: JavaExec) {
     ignoreExitValue = false
 }
 
+task buildEngineWorker(dependsOn: classes, type: JavaExec) {
+    mainClass = "com.etheller.warsmash.html.engineworker.BuildEngineWorkerTeaVM"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.projectDir
+    ignoreExitValue = false
+}
+
 // Plain task (not type: Copy) so Gradle does NOT register
 // build/dist/webapp as an exclusive managed output for this task.
 // A `Copy` task auto-treats its `into` directory as its output dir and runs
@@ -30,19 +37,31 @@ task buildWorker(dependsOn: classes, type: JavaExec) {
 // :html:buildWeb just wrote. Locally this was masked by incremental
 // up-to-date state keeping copyWebOverrides from running.
 task copyWebOverrides {
-    description = "Lay webapp-src overrides on top of the TeaVM build output."
+    description = "Lay webapp-src + public overrides on top of the TeaVM build output."
     inputs.dir file("webapp-src")
+    if (file("public").exists()) {
+        inputs.dir file("public")
+    }
     // No outputs.dir declared on purpose — see comment above.
     doLast {
         copy {
             from "webapp-src"
             into "build/dist/webapp"
         }
+        // Static, hand-curated assets (splash images, favicons, etc.) — kept
+        // separate from webapp-src so it's clear they aren't TeaVM-build output.
+        if (file("public").exists()) {
+            copy {
+                from "public"
+                into "build/dist/webapp"
+            }
+        }
     }
 }
 
 buildWeb.finalizedBy copyWebOverrides
 buildWeb.finalizedBy buildWorker
+buildWeb.finalizedBy buildEngineWorker
 
 eclipse.project {
     name = appName + "-html"

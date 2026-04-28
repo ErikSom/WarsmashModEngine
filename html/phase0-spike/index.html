@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Phase 0 — OffscreenCanvas + WebGL2 in worker</title>
+	<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<style>
+		:root { color-scheme: dark; }
+		body {
+			margin: 0; padding: 0; overflow: hidden;
+			background: #000; color: #eee;
+			font-family: system-ui, -apple-system, sans-serif;
+			height: 100vh;
+		}
+		#canvas {
+			display: block;
+			width: 100vw;
+			height: 100vh;
+			touch-action: none;
+		}
+		#hud {
+			position: fixed; top: 12px; left: 12px;
+			background: rgba(0, 0, 0, 0.55);
+			padding: 10px 14px; border-radius: 4px;
+			font-size: 13px; line-height: 1.5;
+			pointer-events: none;
+			max-width: 90vw;
+		}
+		#hud b { color: #6cf; }
+		#hud .ok { color: #6f6; }
+		#hud .err { color: #f66; }
+		#hint {
+			position: fixed; bottom: 12px; left: 12px;
+			background: rgba(0, 0, 0, 0.55);
+			padding: 8px 12px; border-radius: 4px;
+			font-size: 12px; color: #aaa;
+			pointer-events: none;
+		}
+	</style>
+</head>
+<body oncontextmenu="return false">
+	<canvas id="canvas"></canvas>
+	<div id="hud">phase 0 spike: starting…</div>
+	<div id="hint">click anywhere to randomise clear colour · resize the window to test rAF + viewport</div>
+	<script>
+		const canvas = document.getElementById('canvas');
+		const hud = document.getElementById('hud');
+
+		const log = [];
+		function pushLog(line) {
+			log.push(line);
+			renderHud();
+		}
+		function renderHud(extraHtml) {
+			hud.innerHTML = (extraHtml || '')
+				+ '<div style="margin-top:6px;color:#aaa;font-size:11px;line-height:1.4">'
+				+ log.map(l => `· ${l}`).join('<br>')
+				+ '</div>';
+		}
+		function setHud(html) { renderHud(html); }
+		function fail(msg) { renderHud(`<span class="err">FAIL:</span> ${msg}`); }
+
+		pushLog(`page origin: ${location.origin || '(opaque/file)'}`);
+		pushLog(`page protocol: ${location.protocol}`);
+		pushLog(`OffscreenCanvas: ${typeof OffscreenCanvas !== 'undefined' ? 'yes' : 'NO'}`);
+		pushLog(`Worker: ${typeof Worker !== 'undefined' ? 'yes' : 'NO'}`);
+		pushLog(`crossOriginIsolated: ${self.crossOriginIsolated}`);
+
+		if (typeof OffscreenCanvas === 'undefined') {
+			fail('OffscreenCanvas not available in this browser');
+			throw new Error('no OffscreenCanvas');
+		}
+		if (typeof Worker === 'undefined') {
+			fail('Worker not available in this browser');
+			throw new Error('no Worker');
+		}
+
+		// Pre-flight the worker URL. If serving env has CSP/sandbox issues this
+		// fails before we even try to spawn the worker, so the symptom is a
+		// readable HTTP status instead of a silent black canvas.
+		fetch('worker.js', { cache: 'no-store' })
+			.then(r => {
+				pushLog(`fetch worker.js → ${r.status} ${r.statusText} (${r.headers.get('content-type') || 'no ct'})`);
+				if (!r.ok) {
+					fail(`worker.js fetch returned ${r.status} — likely a serving issue (relative path / sandbox / 404).`);
+					throw new Error('worker.js not reachable');
+				}
+				return spawnWorker();
+			})
+			.catch(err => {
+				fail('worker.js fetch threw: ' + err.message
+					+ ' — if this page was opened via file:// most browsers block Workers; serve over http instead.');
+			});
+
+		// transferControlToOffscreen() permanently detaches the bitmap from the
+		// document — after this call the main thread cannot draw to the canvas,
+		// only resize the element. The OffscreenCanvas object owns rendering and
+		// must be transferred (not cloned) into the worker.
+		let offscreen;
+		try {
+			offscreen = canvas.transferControlToOffscreen();
+			pushLog('transferControlToOffscreen ok');
+		}
+		catch (e) {
+			fail('transferControlToOffscreen threw: ' + e.message);
+			throw e;
+		}
+
+		let worker;
+		function spawnWorker() {
+			try {
+				worker = new Worker('worker.js');
+				pushLog('Worker constructed');
+			}
+			catch (e) {
+				fail('new Worker threw: ' + e.message);
+				return;
+			}
+			wireWorker();
+			worker.postMessage({ kind: 'init', canvas: offscreen }, [offscreen]);
+			pushLog('init posted with OffscreenCanvas transfer');
+
+			// Watchdog: if the worker doesn't say "ready" in 3s, something is
+			// wrong inside the worker (silent script error, wrong MIME, blocked
+			// by CSP). The error event would normally fire in that case, so this
+			// catches the harder "alive but stuck" failure mode too.
+			setTimeout(() => {
+				if (!gotReady) {
+					fail('no "ready" message from worker after 3s — open devtools console; '
+						+ 'most likely a script error inside worker.js or a CSP blocking it.');
+				}
+			}, 3000);
+		}
+
+		let gotReady = false;
+
+		// Backing-store sizing has to come from main thread because OffscreenCanvas
+		// in the worker has no DOM-derived CSS box. We post the device-pixel size
+		// every time the layout changes; the worker resizes the OffscreenCanvas
+		// + GL viewport in response.
+		function postResize() {
+			const dpr = window.devicePixelRatio || 1;
+			const cssW = canvas.clientWidth;
+			const cssH = canvas.clientHeight;
+			worker.postMessage({
+				kind: 'resize',
+				cssWidth: cssW,
+				cssHeight: cssH,
+				dpr,
+				pixelWidth: Math.max(1, Math.round(cssW * dpr)),
+				pixelHeight: Math.max(1, Math.round(cssH * dpr)),
+			});
+		}
+
+		function wireWorker() {
+			worker.onmessage = (e) => {
+				const m = e.data;
+				if (m.kind === 'ready') {
+					gotReady = true;
+					renderHud(`<b>worker ready.</b> GL: ${m.glVersion}<br>`
+						+ `vendor: ${m.vendor}<br>`
+						+ `renderer: ${m.renderer}<br>`
+						+ `<span class="ok">rAF firing in worker.</span>`);
+					postResize();
+				}
+				else if (m.kind === 'frame-stats') {
+					renderHud(`<b>worker live.</b> ${m.fps.toFixed(1)} fps · `
+						+ `frame ${m.frameCount} · ${m.pixelWidth}×${m.pixelHeight}<br>`
+						+ `last click: ${m.lastClick || '(none)'} · clicks: ${m.clickCount}<br>`
+						+ `<span class="ok">${m.glVersion}</span>`);
+				}
+				else if (m.kind === 'error') {
+					fail(m.message);
+				}
+			};
+			worker.onerror = (e) => fail('worker error: ' + (e.message || '(no message — script likely failed to parse)'));
+		}
+
+		window.addEventListener('resize', () => { if (worker) postResize(); });
+
+		// Forward pointer events. Coordinates are CSS pixels relative to the
+		// canvas; the worker scales by dpr internally. This is the same shape
+		// we'd use for WebInput proxying in the real port.
+		function relayPointer(name, ev) {
+			if (!worker) return;
+			const rect = canvas.getBoundingClientRect();
+			worker.postMessage({
+				kind: 'pointer',
+				name,
+				x: ev.clientX - rect.left,
+				y: ev.clientY - rect.top,
+				button: ev.button,
+				buttons: ev.buttons,
+			});
+		}
+		canvas.addEventListener('pointerdown', e => relayPointer('down', e));
+		canvas.addEventListener('pointerup', e => relayPointer('up', e));
+		canvas.addEventListener('pointermove', e => relayPointer('move', e));
+	</script>
+</body>
+</html>
