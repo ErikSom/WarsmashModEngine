@@ -241,7 +241,7 @@
 		const CUSTOM_MAP_PREFIX = 'Maps/Upload/';
 		const BUILD_ID = String(Date.now());
 		// Bump on user-visible releases. Mirror the entry in html/CHANGELOG.md.
-		const VERSION = '0.1.0';
+		const VERSION = '0.1.1';
 
 		const el = (id) => document.getElementById(id);
 		const setStatus = (m) => { el('status').textContent = m; };
@@ -990,28 +990,35 @@
 			});
 		}
 
-		// One-time legacy cleanup: the previous main-thread engine extracted
-		// MPQ contents into OPFS /extracted/ and preloaded from there at boot.
-		// The engine-worker reads MPQs straight from /w3/ via SAH, so /extracted
-		// is just dead storage (~1 GB) for users coming from an older build.
-		// Drop it silently on every page load — quick if it's already gone,
-		// noticeable but harmless otherwise. Remove this block after a release
-		// or two once most users have migrated.
-		async function purgeLegacyExtracted() {
+		// One-time legacy cleanup: the presence of OPFS /extracted/ marks an
+		// install staged by the previous main-thread engine. Empirically the
+		// old /w3 layout from that era doesn't always boot cleanly under the
+		// engine-worker (esp. on iOS Safari). Safer to wipe everything and
+		// have the user re-pick their Warcraft III folder once than to try to
+		// migrate in place. Remove this block after a release or two once
+		// most users have migrated.
+		async function purgeLegacyState() {
 			try {
 				const root = await navigator.storage.getDirectory();
+				let hasLegacy = false;
 				try {
 					await root.getDirectoryHandle('extracted');
+					hasLegacy = true;
 				}
-				catch (e) {
-					return; // already absent — nothing to do
+				catch (e) { /* not present */ }
+				if (!hasLegacy) return;
+				setStatus('Old install detected — clearing cached files. You\'ll need to re-pick your Warcraft III folder once.');
+				for (const name of ['extracted', 'w3']) {
+					try { await root.removeEntry(name, { recursive: true }); }
+					catch (e) { /* may not exist */ }
 				}
-				setStatus('Cleaning up legacy cached files…');
-				await root.removeEntry('extracted', { recursive: true });
-				setStatus('');
+				localStorage.removeItem(READY_KEY);
+				localStorage.removeItem(COUNT_KEY);
+				localStorage.removeItem(INDEX_KEY);
+				setStatus('Cleared cached files. Pick your Warcraft III folder to continue.');
 			}
 			catch (e) {
-				console.warn('legacy /extracted cleanup failed:', e);
+				console.warn('legacy cleanup failed:', e);
 			}
 		}
 
@@ -1032,7 +1039,7 @@
 				setError('OPFS is not supported in this browser.');
 				return;
 			}
-			await purgeLegacyExtracted();
+			await purgeLegacyState();
 			if (localStorage.getItem(READY_KEY) === '1') {
 				const index = readIndex();
 				const summary = summarizeIndex(index);

@@ -1,5 +1,12 @@
 # What's new
 
+## 0.1.1 — April 2026
+
+- **Smoother upgrade from older builds.** If we detect cached files
+  from a previous version that didn't always boot cleanly (especially
+  on phones), we now wipe everything and ask you to re-pick your
+  Warcraft III folder once. Future visits work as normal.
+
 ## 0.1.0 — April 2026
 
 The first proper release of the browser build.
