@@ -20,16 +20,29 @@
 		#canvas-wrap {
 			display: none;
 			justify-content: center; align-items: center;
-			height: 100vh;
+			width: 100vw; height: 100vh;
 			height: 100dvh;
+			background: #000 url('bg.png') center/cover no-repeat;
 			touch-action: none;
 		}
 		#canvas {
 			border: none;
 			display: block;
-			width: 100%;
-			height: 100%;
+			/* Cap to the engine's internal 4:3 layout. WarsmashGdxMenuScreen
+			   centers a 4:3 viewport inside whatever canvas it's given; if the
+			   canvas itself is 4:3 the menu fills it edge-to-edge with no
+			   ugly off-center 3D backdrop. Wrap fills the viewport in black so
+			   the leftover area becomes letterbox space.
+			   The min() expressions compute the largest 4:3 box that fits in
+			   the viewport. CSS aspect-ratio alone falls back to the canvas
+			   element's tiny intrinsic 300×150 default when both dims are
+			   auto, hence the explicit math. */
+			width:  min(100vw, calc(100vh * 4 / 3));
+			height: min(100vh, calc(100vw * 3 / 4));
 			touch-action: none;
+			/* Hide the OS pointer; the engine draws its own (Cursor.png from
+			   the WC3 install). */
+			cursor: none;
 		}
 		#overlay {
 			position: fixed; inset: 0;
@@ -241,7 +254,7 @@
 		const CUSTOM_MAP_PREFIX = 'Maps/Upload/';
 		const BUILD_ID = String(Date.now());
 		// Bump on user-visible releases. Mirror the entry in html/CHANGELOG.md.
-		const VERSION = '0.1.1';
+		const VERSION = '0.1.2';
 
 		const el = (id) => document.getElementById(id);
 		const setStatus = (m) => { el('status').textContent = m; };
@@ -679,11 +692,21 @@
 			// into WorkerInput, which fans out to libGDX InputProcessor.
 			function relayPointer(name, e) {
 				const rect = canvas.getBoundingClientRect();
+				// Translate browser pointer button → libGDX Input.Buttons.
+				// Browser:  0=LEFT, 1=MIDDLE, 2=RIGHT
+				// libGDX:   0=LEFT, 1=RIGHT, 2=MIDDLE
+				let btn;
+				switch (e.button) {
+					case 0:  btn = 0; break;  // LEFT
+					case 1:  btn = 2; break;  // MIDDLE
+					case 2:  btn = 1; break;  // RIGHT
+					default: btn = e.button;
+				}
 				worker.postMessage({
 					kind: 'pointer', name,
 					x: Math.round(e.clientX - rect.left),
 					y: Math.round(e.clientY - rect.top),
-					button: e.button,
+					button: btn,
 				});
 			}
 			canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); relayPointer('down', e); });
@@ -699,6 +722,30 @@
 			});
 			window.addEventListener('keyup', e => {
 				worker.postMessage({ kind: 'key', name: 'up', keycode: domKeyToGdx(e), ch: '' });
+			});
+
+			// Debounced window-resize → propagate to worker. The CSS rules
+			// already reflow the canvas DOM box (it's a 4:3 cap on 100vw/100vh);
+			// the worker needs to resize the OffscreenCanvas back buffer + tell
+			// libGDX so the engine re-projects. Debounce because resize events
+			// fire continuously while dragging — we only care about the final
+			// size, and OffscreenCanvas resize triggers GL state churn.
+			let resizeTimer = null;
+			function postResize() {
+				const cssW = canvas.clientWidth;
+				const cssH = canvas.clientHeight;
+				if (cssW <= 0 || cssH <= 0) return;
+				worker.postMessage({
+					kind: 'resize',
+					cssWidth: cssW,
+					cssHeight: cssH,
+					pixelWidth: cssW,   // back buffer = CSS px (no DPR scaling, see init)
+					pixelHeight: cssH,
+				});
+			}
+			window.addEventListener('resize', () => {
+				clearTimeout(resizeTimer);
+				resizeTimer = setTimeout(postResize, 150);
 			});
 		}
 

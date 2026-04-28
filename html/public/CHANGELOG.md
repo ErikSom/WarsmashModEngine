@@ -1,5 +1,22 @@
 # What's new
 
+## 0.1.2 — April 2026
+
+- **In-game performance.** Multi-second freezes are gone. The game
+  starts up much faster too — the heavy first-tick AI initialisation
+  has been disabled (single-player matches play out without computer
+  opponents for now while we work on faster AI).
+- **Crisper visuals.** A bunch of behind-the-scenes work removed
+  per-frame overhead from MPQ asset reads and OpenGL error checks.
+- **Right-click works.** Move/attack-move orders register correctly.
+- **Mouse cursor.** The OS cursor is hidden over the game; the
+  in-game Warcraft III cursor is the only one you see.
+- **Background image** behind the game canvas's letterbox area when
+  your window doesn't match the game's 4:3 aspect.
+- **Window resize** updates the game canvas live, though text stays
+  pixel-sharp only at the size you opened the page at — reload after
+  resizing for crisp text.
+
 ## 0.1.1 — April 2026
 
 - **Smoother upgrade from older builds.** If we detect cached files

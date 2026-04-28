@@ -48,6 +48,7 @@ public final class EngineWorkerMain {
 	private static SpriteBatch batch;
 	private static ShapeRenderer shapes;
 	private static Texture proceduralTexture;
+	private static JSObject offscreenCanvasRef;
 
 	private EngineWorkerMain() {
 	}
@@ -73,6 +74,7 @@ public final class EngineWorkerMain {
 	private static void startRender(final JSObject init) {
 		try {
 			final JSObject offscreenCanvas = initCanvas(init);
+			offscreenCanvasRef = offscreenCanvas;
 			final JSObject ctx = getWebGL2Context(offscreenCanvas);
 			if (ctx == null) {
 				postMessage("engine-worker: ERROR webgl2 unavailable");
@@ -176,9 +178,6 @@ public final class EngineWorkerMain {
 
 			if (realEngine != null) {
 				// Game.render() delegates to the current Screen.render(deltaTime).
-				// All the spike's hand-rolled pie / quad rendering is gone —
-				// what we see now IS the engine's WebMapBootScreen (or whatever
-				// screen the engine has set).
 				realEngine.render();
 			}
 		}
@@ -483,6 +482,43 @@ public final class EngineWorkerMain {
 			input.postKey(name, keycode, ch);
 		});
 		setOnScroll((dx, dy) -> input.postScroll(dx, dy));
+		setOnResize(EngineWorkerMain::handleResize);
+	}
+
+	/**
+	 * Re-size the OffscreenCanvas back buffer + propagate to libGDX. Called
+	 * from the main thread's debounced window-resize handler. Skips if dims
+	 * haven't changed (cheap guard against duplicate events) or if the engine
+	 * isn't constructed yet.
+	 */
+	private static void handleResize(final int cssW, final int cssH, final int pixelW, final int pixelH) {
+		if (graphics == null || offscreenCanvasRef == null) return;
+		final int newBackW = (pixelW > 0) ? pixelW : cssW;
+		final int newBackH = (pixelH > 0) ? pixelH : cssH;
+		if (newBackW == graphics.getBackBufferWidth() && newBackH == graphics.getBackBufferHeight()) {
+			return;
+		}
+		setCanvasSize(offscreenCanvasRef, newBackW, newBackH);
+		graphics.onResize(cssW, cssH, newBackW, newBackH);
+		if (realEngine != null) {
+			try {
+				realEngine.resize(graphics.getWidth(), graphics.getHeight());
+			}
+			catch (final Throwable t) {
+				postMessage("engine-worker: realEngine.resize FAILED — " + t);
+			}
+		}
+	}
+
+	@JSBody(params = { "canvas", "w", "h" }, script = "canvas.width = w; canvas.height = h;")
+	private static native void setCanvasSize(JSObject canvas, int w, int h);
+
+	@JSBody(params = { "fn" }, script = "self.__onResize = fn;")
+	private static native void setOnResize(ResizeHandler fn);
+
+	@org.teavm.jso.JSFunctor
+	interface ResizeHandler extends JSObject {
+		void accept(int cssWidth, int cssHeight, int pixelWidth, int pixelHeight);
 	}
 
 	@JSBody(params = { "fn" }, script = "self.__onPointer = fn;")
