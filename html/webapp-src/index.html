@@ -312,20 +312,19 @@
 		}
 
 		// User-uploaded maps live under /extracted/Maps/Upload/; the engine's
-		// WebMapBootScreen enumerates /extracted/ recursively for *.w3x/*.w3m.
-		// "Stock" maps come from the MPQ extraction worker and live under other
-		// subdirectories of /extracted/Maps/ (FrozenThrone, etc.). The Manage
-		// Maps panel walks /extracted/Maps/ recursively, so it shows every map
-		// the engine would find, not just the user-added ones.
+		// User-uploaded maps live under /w3/Maps/Upload/. The engine-worker
+		// walks /w3/Maps/ at boot and pre-loads every .w3x/.w3m file (both
+		// stock-from-install and uploaded). The Manage Maps panel shows
+		// everything under /w3/Maps/.
 		const UPLOAD_DIR_PARTS = ['Maps', 'Upload'];
 
-		async function getExtractedRoot(create = false) {
+		async function getMapsHostRoot(create = false) {
 			const root = await navigator.storage.getDirectory();
-			return await root.getDirectoryHandle('extracted', { create });
+			return await root.getDirectoryHandle('w3', { create });
 		}
 
 		async function getDirByParts(parts, create = false) {
-			let dir = await getExtractedRoot(create);
+			let dir = await getMapsHostRoot(create);
 			for (const p of parts) {
 				dir = await dir.getDirectoryHandle(p, { create });
 			}
