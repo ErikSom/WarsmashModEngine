@@ -622,8 +622,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 				this.globalScope.runThreads();
 			}
 			catch (final Throwable t) {
-				System.out.println("[sim-tick] game JASS scope crashed: " + t.getClass().getSimpleName() + ": "
-						+ t.getMessage());
+				System.out.println("[sim-tick] game JASS scope crashed: " + describeWithCauses(t));
 				throw t;
 			}
 		}
@@ -632,8 +631,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 				extra.runThreads();
 			}
 			catch (final Throwable t) {
-				System.out.println("[sim-tick] AI JASS scope crashed: " + t.getClass().getSimpleName() + ": "
-						+ t.getMessage());
+				System.out.println("[sim-tick] AI JASS scope crashed: " + describeWithCauses(t));
 				throw t;
 			}
 		}
@@ -1200,6 +1198,21 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		if (extraScope != null) {
 			this.extraThreadScopes.add(extraScope);
 		}
+	}
+
+	private static String describeWithCauses(final Throwable t) {
+		final StringBuilder sb = new StringBuilder();
+		Throwable cur = t;
+		int depth = 0;
+		while ((cur != null) && (depth < 8)) {
+			if (depth > 0) {
+				sb.append("\n  caused by: ");
+			}
+			sb.append(cur.getClass().getSimpleName()).append(": ").append(cur.getMessage());
+			cur = cur.getCause();
+			depth++;
+		}
+		return sb.toString();
 	}
 
 	public int getTerrainHeight(final float x, final float y) {

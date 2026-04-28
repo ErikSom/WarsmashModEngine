@@ -2005,6 +2005,9 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
 						final CTimerJassBase timer = arguments.get(1).visit(ObjectJassValueVisitor.getInstance());
+						if (timer == null) {
+							return eventType.getNullValue();
+						}
 						timer.addEvent(trigger);
 						return new HandleJassValue(eventType, new RemovableTriggerEvent(trigger) {
 							@Override
@@ -2084,13 +2087,8 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterDialogEvent",
 					(arguments, globalScope, triggerScope) -> {
-						final JassValue triggerArg = arguments.get(0);
-						final JassValue dialogArg = arguments.get(1);
-						if ((triggerArg == null) || (dialogArg == null)) {
-							return eventType.getNullValue();
-						}
-						final Trigger trigger = triggerArg.visit(ObjectJassValueVisitor.getInstance());
-						final CScriptDialog dialog = dialogArg.visit(ObjectJassValueVisitor.getInstance());
+						final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+						final CScriptDialog dialog = arguments.get(1).visit(ObjectJassValueVisitor.getInstance());
 						if (dialog == null) {
 							return eventType.getNullValue();
 						}
@@ -2098,13 +2096,9 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterDialogButtonEvent",
 					(arguments, globalScope, triggerScope) -> {
-						final JassValue triggerArg = arguments.get(0);
-						final JassValue buttonArg = arguments.get(1);
-						if ((triggerArg == null) || (buttonArg == null)) {
-							return eventType.getNullValue();
-						}
-						final Trigger trigger = triggerArg.visit(ObjectJassValueVisitor.getInstance());
-						final CScriptDialogButton dialogButton = buttonArg.visit(ObjectJassValueVisitor.getInstance());
+						final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+						final CScriptDialogButton dialogButton = arguments.get(1)
+								.visit(ObjectJassValueVisitor.getInstance());
 						if (dialogButton == null) {
 							return eventType.getNullValue();
 						}
@@ -4105,6 +4099,9 @@ public class Jass2 {
 						final CPlayer whichPlayer = arguments.get(1).visit(ObjectJassValueVisitor.getInstance());
 						final JassGameEventsWar3 whichPlayerEvent = arguments.get(2)
 								.visit(ObjectJassValueVisitor.getInstance());
+						if ((whichPlayer == null) || (whichPlayerEvent == null)) {
+							return eventType.getNullValue();
+						}
 						final TriggerBooleanExpression filter = nullable(arguments, 3,
 								ObjectJassValueVisitor.<TriggerBooleanExpression>getInstance());
 						return new HandleJassValue(eventType,

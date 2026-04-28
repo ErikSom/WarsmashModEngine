@@ -75,6 +75,18 @@ public class NativeJassFunction {
 		if (!checkNativeExists()) {
 			return this.returnType.getNullValue();
 		}
+		// JASS lets unset locals/globals reach native callsites as Java null
+		// (see e.g. {@code TriggerRegisterTimerExpireEventBJ} firing before
+		// the timer is created). Real WC3 tolerates that — the native sees a
+		// type-correct null handle. Replace any Java-null arg with its
+		// parameter type's null value so each native impl can handle the
+		// missing input however it needs (return null event, no-op, etc.)
+		// instead of crashing on an unguarded {@code arg.visit(...)}.
+		for (int i = 0; i < arguments.size(); i++) {
+			if (arguments.get(i) == null) {
+				arguments.set(i, this.parameters.get(i).getType().getNullValue());
+			}
+		}
 		try {
 			return this.implementation.call(arguments, globalScope, triggerScope);
 		}

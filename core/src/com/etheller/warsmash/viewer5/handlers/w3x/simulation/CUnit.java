@@ -368,6 +368,18 @@ public class CUnit extends CWidget {
 	}
 
 	public void regeneratePathingInstance(final CSimulation game, final RgbaImage buildingPathingPixelMap) {
+		// Some unit types (notably custom maps that omit the building pathing
+		// texture, or web builds where the asset failed to load) reach this
+		// path with a null pixel map. Without a footprint we can't blit the
+		// overlay; snap to the 64-grid and skip — the unit still roots/builds,
+		// just without a terrain pathing footprint.
+		if (buildingPathingPixelMap == null) {
+			final float snappedX = (float) Math.floor(getX() / 64f) * 64f;
+			final float snappedY = (float) Math.floor(getY() / 64f) * 64f;
+			setX(snappedX);
+			setY(snappedY);
+			return;
+		}
 		float unitX = getX();
 		float unitY = getY();
 		unitX = (float) Math.floor(unitX / 64f) * 64f;
