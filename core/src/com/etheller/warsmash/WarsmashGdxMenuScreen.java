@@ -619,6 +619,13 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 
 //		super.resize(width, height);
 
+		// Note: not calling uiViewport.setWorldSize here. Tried it to keep text
+		// pixel-crisp at any window size, but invalidating the world dims at
+		// runtime broke text rendering (frames vanished). The menu's GameUI
+		// caches state tied to the original world dims; resize only updates
+		// the screen mapping, which leaves rendering soft at non-original
+		// sizes. Reload for pixel-perfect display until the engine's text/
+		// frame layout supports runtime world-size changes properly.
 		this.uiViewport.update(width, height);
 		this.uiCamera.position.set(getMinWorldWidth() / 2, getMinWorldHeight() / 2, 0);
 

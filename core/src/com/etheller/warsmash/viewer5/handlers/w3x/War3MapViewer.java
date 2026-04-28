@@ -1281,6 +1281,14 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	public static boolean glErrorFatal = true;
 
 	private void assertNoGlError(final String stage) {
+		// glGetError is a sync GPU stall — costly on WebGL. Only call it when
+		// we'd actually act on the result: glErrorFatal=true means we want to
+		// crash on errors, ENABLE_DEBUG means we want to log. Web builds set
+		// glErrorFatal=false to keep rendering past WebGL strictness errors;
+		// in that mode the per-stage check is dead weight.
+		if (!glErrorFatal && !WarsmashConstants.ENABLE_DEBUG) {
+			return;
+		}
 		final int glGetError = Gdx.gl.glGetError();
 		if (glGetError != GL20.GL_NO_ERROR) {
 			if (glErrorFatal) {

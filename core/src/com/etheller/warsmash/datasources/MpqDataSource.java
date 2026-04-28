@@ -51,17 +51,19 @@ public class MpqDataSource implements DataSource {
 
 	@Override
 	public ByteBuffer read(final String path) throws IOException {
-		ArchivedFile file = null;
+		// Non-throwing lookup: the "file not in this MPQ" path is hot — every
+		// CompoundDataSource read tries each layer in turn, and the throw +
+		// stack-trace fill on TeaVM cost ~0.4 ms per miss. Profiles showed
+		// MPQException construction at 3+% of total CPU for in-game frames.
+		final ArchivedFile file;
 		try {
-			file = this.archive.lookupHash2(new HashLookup(path));
+			file = this.archive.tryLookupHash2(new HashLookup(path));
 		}
 		catch (final MPQException exc) {
-			if (exc.getMessage().equals("lookup not found")) {
-				return null;
-			}
-			else {
-				throw new IOException(exc);
-			}
+			throw new IOException(exc);
+		}
+		if (file == null) {
+			return null;
 		}
 		try (final ArchivedFileStream stream = new ArchivedFileStream(this.inputChannel, this.extractor, file)) {
 			final long size = stream.size();
@@ -73,20 +75,15 @@ public class MpqDataSource implements DataSource {
 
 	@Override
 	public File getFile(final String filepath) throws IOException {
-		// TODO Auto-generated method stub
-		// System.out.println("getting it from the outside: " +
-		// filepath);
-		ArchivedFile file = null;
+		final ArchivedFile file;
 		try {
-			file = this.archive.lookupHash2(new HashLookup(filepath));
+			file = this.archive.tryLookupHash2(new HashLookup(filepath));
 		}
 		catch (final MPQException exc) {
-			if (exc.getMessage().equals("lookup not found")) {
-				return null;
-			}
-			else {
-				throw new IOException(exc);
-			}
+			throw new IOException(exc);
+		}
+		if (file == null) {
+			return null;
 		}
 		String tmpdir = System.getProperty("java.io.tmpdir");
 		if (!tmpdir.endsWith(File.separator)) {
@@ -110,18 +107,7 @@ public class MpqDataSource implements DataSource {
 
 	@Override
 	public boolean has(final String filepath) {
-		try {
-			this.archive.lookupPath(filepath);
-			return true;
-		}
-		catch (final MPQException exc) {
-			if (exc.getMessage().equals("lookup not found")) {
-				return false;
-			}
-			else {
-				throw new RuntimeException(exc);
-			}
-		}
+		return this.archive.tryLookupPath(filepath) >= 0;
 	}
 
 	@Override

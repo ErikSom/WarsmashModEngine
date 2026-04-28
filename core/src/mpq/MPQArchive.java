@@ -280,12 +280,29 @@ public class MPQArchive {
 	public int lookupPath(String path) throws MPQException{
 		return hashTable.lookupBlock(new HashLookup(path));
 	}
-	
+
+	/** Returns -1 if the path isn't in the archive (instead of throwing). */
+	public int tryLookupPath(String path){
+		return hashTable.tryLookupBlock(new HashLookup(path));
+	}
+
 	public BlockTable.Entry lookupHash(HashLookup hash) throws MPQException{
 		return blockTable.lookupEntry(hashTable.lookupBlock(hash));
 	}
-	
+
 	public ArchivedFile lookupHash2(HashLookup hash) throws MPQException{
 		return new ArchivedFile(this, hash, blockTable.lookupEntry(hashTable.lookupBlock(hash)));
+	}
+
+	/**
+	 * Returns null if the hash isn't in the archive (instead of throwing).
+	 * Note: ArchivedFile's ctor still declares MPQException — that fires
+	 * for genuinely malformed entries (encryption-key derivation failures,
+	 * etc.), not the common "not present" case we want to make cheap.
+	 */
+	public ArchivedFile tryLookupHash2(HashLookup hash) throws MPQException{
+		final int blockIdx = hashTable.tryLookupBlock(hash);
+		if (blockIdx < 0) return null;
+		return new ArchivedFile(this, hash, blockTable.lookupEntry(blockIdx));
 	}
 }

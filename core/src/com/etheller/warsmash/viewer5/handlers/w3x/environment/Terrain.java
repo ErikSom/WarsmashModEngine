@@ -50,6 +50,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.DynamicShadowManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.SplatModel;
 import com.etheller.warsmash.viewer5.handlers.w3x.SplatModel.SplatMover;
 import com.etheller.warsmash.viewer5.handlers.w3x.Variations;
+import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.W3xSceneLightManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.W3xShaders;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
@@ -1073,6 +1074,11 @@ public class Terrain {
 	public static boolean glErrorFatal = true;
 
 	private static void assertNoGlError(final String stage) {
+		// See War3MapViewer.assertNoGlError — skip the sync stall when we'd
+		// neither crash nor log the result.
+		if (!glErrorFatal && !WarsmashConstants.ENABLE_DEBUG) {
+			return;
+		}
 		final int error = Gdx.gl.glGetError();
 		if (error != GL20.GL_NO_ERROR) {
 			if (glErrorFatal) {

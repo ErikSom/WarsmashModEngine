@@ -35,7 +35,6 @@ import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid.Remova
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
-import com.etheller.warsmash.viewer5.handlers.w3x.simulation.ai.CMeleePlayerAI;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorMove;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttackInstant;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttackListener;
@@ -99,13 +98,6 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	private final List<CItem> items;
 	private final List<CPlayer> players;
 	private final List<CPlayerUnitOrderExecutor> defaultPlayerUnitOrderExecutors;
-	private final List<CMeleePlayerAI> aiPlayers = new ArrayList<>();
-	/** Auxiliary {@link GlobalScope}s pumped each tick alongside the main
-	 *  game scope. The bundled WC3 melee AI scripts run in a separate
-	 *  scope so their {@code main}/race-specific globals don't collide
-	 *  with the map's own JASS state. Registered via
-	 *  {@link #addExtraThreadScope}. */
-	private final List<GlobalScope> extraThreadScopes = new ArrayList<>();
 	private final List<CEffect> projectiles;
 	private final List<CEffect> newProjectiles;
 	private final HandleIdAllocator handleIdAllocator;
@@ -208,14 +200,6 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 			this.defaultPlayerUnitOrderExecutors.add(new CPlayerUnitOrderExecutor(this, i));
 			if ((newPlayer.getController() == CMapControl.NEUTRAL) && (i < (WarsmashConstants.MAX_PLAYERS - 4))) {
 				neutralPlayers.add(newPlayer);
-			}
-			// Install a Java-side melee AI for every computer-controlled
-			// slot. Without this, COMPUTER players sit at their start
-			// location forever — the engine has no real {@code .ai} script
-			// loader yet, so this stand-in drives the basic behaviour
-			// (workers harvest, idle combat units attack-move).
-			if (newPlayer.getController() == CMapControl.COMPUTER) {
-				this.aiPlayers.add(new CMeleePlayerAI(i));
 			}
 		}
 		final CPlayer neutralAggressive = this.players.get(this.players.size() - 4);
@@ -556,11 +540,6 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		for (final CPathfindingProcessor pathfindingProcessor : this.pathfindingProcessors) {
 			pathfindingProcessor.update(this);
 		}
-		// Drive the per-player AI before the tick counter advances so the AI
-		// sees the freshly-updated unit state (just-finished orders, etc.).
-		for (final CMeleePlayerAI aiPlayer : this.aiPlayers) {
-			aiPlayer.update(this);
-		}
 		this.gameTurnTick++;
 		final float timeOfDayBefore = getGameTimeOfDay();
 		if (this.falseTimeOfDay != null) {
@@ -623,15 +602,6 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 			}
 			catch (final Throwable t) {
 				System.out.println("[sim-tick] game JASS scope crashed: " + describeWithCauses(t));
-				throw t;
-			}
-		}
-		for (final GlobalScope extra : this.extraThreadScopes) {
-			try {
-				extra.runThreads();
-			}
-			catch (final Throwable t) {
-				System.out.println("[sim-tick] AI JASS scope crashed: " + describeWithCauses(t));
 				throw t;
 			}
 		}
@@ -1189,15 +1159,6 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 
 	public GlobalScope getGlobalScope() {
 		return this.globalScope;
-	}
-
-	/** Register a JASS global scope to be pumped each simulation tick alongside
-	 *  the main game scope. Used by the AI-script preloader so the AI threads
-	 *  it spawns actually advance. Null is silently ignored. */
-	public void addExtraThreadScope(final GlobalScope extraScope) {
-		if (extraScope != null) {
-			this.extraThreadScopes.add(extraScope);
-		}
 	}
 
 	private static String describeWithCauses(final Throwable t) {

@@ -13,16 +13,31 @@ public class HashTable {
 	}
 	
 	public int lookupBlock(HashLookup what) throws MPQException{
-		int mask = bucketArray.length-1;
-		int index = what.index & mask;
-		for(int pos = index ; ; ){
-			Entry temp = bucketArray[pos];
-			if(temp.blockIndex == BLOCK_EMPTY_ALWAYS) break;
-			if(temp.getHash() == what.hash) return temp.blockIndex;
-			pos = ( pos + 1 ) & mask;
-			if(pos == index) break;
+		final int idx = tryLookupBlock(what);
+		if (idx < 0) {
+			throw new MPQException("lookup not found");
 		}
-		throw new MPQException("lookup not found");
+		return idx;
+	}
+
+	/**
+	 * Non-throwing variant of {@link #lookupBlock}. Returns -1 when the file
+	 * isn't in the archive — the most common case during compound-data-source
+	 * lookups, where it'd previously throw + catch + return null up the chain.
+	 * On TeaVM the throw alone is ~0.4 ms because every Throwable construction
+	 * fills a JS stack trace. On a real compound source this dominated trace
+	 * profiles (3+% of total CPU, multiple seconds per profile).
+	 */
+	public int tryLookupBlock(HashLookup what){
+		final int mask = bucketArray.length - 1;
+		final int index = what.index & mask;
+		for (int pos = index; ;) {
+			final Entry temp = bucketArray[pos];
+			if (temp.blockIndex == BLOCK_EMPTY_ALWAYS) return -1;
+			if (temp.getHash() == what.hash) return temp.blockIndex;
+			pos = (pos + 1) & mask;
+			if (pos == index) return -1;
+		}
 	}
 	
 	/*public static int lookupBlock(Entry[] hashtable, byte[] file) throws FileNotFoundException{

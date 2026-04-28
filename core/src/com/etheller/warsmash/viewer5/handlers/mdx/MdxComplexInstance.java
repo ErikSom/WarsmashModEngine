@@ -548,9 +548,14 @@ public class MdxComplexInstance extends ModelInstance {
 			}
 		}
 
-		final int glGetError = Gdx.gl.glGetError();
-		if ((glGetError != GL20.GL_NO_ERROR) && WarsmashConstants.ENABLE_DEBUG) {
-			throw new IllegalStateException("GL ERROR: " + glGetError + " ON " + model.name + " (Opaque)");
+		// glGetError forces a sync GPU round-trip on WebGL — it was firing per
+		// model per frame and showed up at 6%+ of CPU in worker profiles.
+		// Skip entirely unless debug builds need to assert.
+		if (WarsmashConstants.ENABLE_DEBUG) {
+			final int glGetError = Gdx.gl.glGetError();
+			if (glGetError != GL20.GL_NO_ERROR) {
+				throw new IllegalStateException("GL ERROR: " + glGetError + " ON " + model.name + " (Opaque)");
+			}
 		}
 	}
 
@@ -568,10 +573,12 @@ public class MdxComplexInstance extends ModelInstance {
 		}
 		for (final GenericGroup group : model.translucentGroups) {
 			group.render(this, this.scene.camera.viewProjectionMatrix);
-
-			final int glGetError = Gdx.gl.glGetError();
-			if ((glGetError != GL20.GL_NO_ERROR) && WarsmashConstants.ENABLE_DEBUG) {
-				throw new IllegalStateException("GL ERROR: " + glGetError + " ON " + model.name + " (Translucent)");
+			// See opaque-path comment — skip the sync glGetError unless debug.
+			if (WarsmashConstants.ENABLE_DEBUG) {
+				final int glGetError = Gdx.gl.glGetError();
+				if (glGetError != GL20.GL_NO_ERROR) {
+					throw new IllegalStateException("GL ERROR: " + glGetError + " ON " + model.name + " (Translucent)");
+				}
 			}
 		}
 	}

@@ -1155,7 +1155,8 @@ public class MenuUI {
 				MapBytesEnsurer.get().ensure(MenuUI.this.dataSource, newSelectedItem, new Runnable() {
 					@Override
 					public void run() {
-					try {
+					War3MapConfig fallbackConfig = null;
+				try {
 						final War3Map map = War3MapViewer.beginLoadingMapFromDataSource(MenuUI.this.dataSource,
 								newSelectedItem);
 						if (lastMapListMap[0] != null) {
@@ -1171,6 +1172,7 @@ public class MenuUI {
 						final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
 						MenuUI.this.rootFrame.setMapStrings(wtsFile);
 						final War3MapConfig war3MapConfig = new War3MapConfig(WarsmashConstants.MAX_PLAYERS);
+						fallbackConfig = war3MapConfig;
 						for (int i = 0; (i < WarsmashConstants.MAX_PLAYERS) && (i < mapInfo.getPlayers().size()); i++) {
 							final CBasePlayer player = war3MapConfig.getPlayer(i);
 							player.setName(MenuUI.this.rootFrame.getTrigStr(mapInfo.getPlayers().get(i).getName()));
@@ -1219,8 +1221,21 @@ public class MenuUI {
 										MenuUI.this.rootFrame, MenuUI.this.uiViewport));
 						MenuUI.this.currentMapConfig = war3MapConfig;
 					}
-					catch (final IOException e) {
-						e.printStackTrace();
+					catch (final IOException | RuntimeException e) {
+						// Map's JASS may be missing/broken (e.g. no `config`
+						// function), or its W3I/WTS may not parse. Skip the
+						// per-map preview population rather than kill the
+						// menu render frame; user can pick another map.
+						System.out.println("[mapList] preview failed for "
+								+ newSelectedItem + ": "
+								+ e.getClass().getSimpleName() + ": " + e.getMessage());
+						// Still install a non-null currentMapConfig so the
+						// Play Game button has something to read. Without
+						// this, clicking Play on a map that failed to preview
+						// would NPE on currentMapConfig.getPlayer(...).
+						if (fallbackConfig != null) {
+							MenuUI.this.currentMapConfig = fallbackConfig;
+						}
 					}
 					}
 				});

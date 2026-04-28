@@ -222,23 +222,6 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.commonEnv = Jass2.loadCommon(this.viewer.mapMpq, this.uiViewport, this.uiScene, this.viewer, this.gameUI,
 				this.meleeUI, WarsmashConstants.JASS_FILE_LIST);
 		this.commonEnv.main();
-		// Load + parse the bundled AI scripts into their own JassProgram,
-		// queue main(), and register the resulting global scope with the
-		// simulation so its threads tick alongside the map's own JASS.
-		// First-flight is data-collection-flavoured: most AI natives are
-		// still no-ops and warn-once on first call, which gives us the
-		// runtime call list (strict subset of the parse-time declaration
-		// list and far more useful for prioritising implementation).
-		try {
-			final com.etheller.interpreter.ast.scope.GlobalScope aiScope = com.etheller.warsmash.parsers.jass.JassAiPreload
-					.preload(this.viewer.mapMpq, this.viewer.simulation);
-			if (this.viewer.simulation != null) {
-				this.viewer.simulation.addExtraThreadScope(aiScope);
-			}
-		}
-		catch (final Throwable t) {
-			System.out.println("[ai-preload] aborted: " + t.getClass().getSimpleName() + ": " + t.getMessage());
-		}
 	}
 
 	// parseDataSources moved to DataSourceAssembly so that code paths which
@@ -316,6 +299,10 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 	public void resize(final int width, final int height) {
 //		super.resize(width, height);
 
+		// See WarsmashGdxMenuScreen.resize: changing uiViewport's min world
+		// size at runtime broke text rendering, so we leave it alone. UI
+		// scales but stays positioned correctly. Reload for pixel-perfect
+		// display at the new size.
 		this.uiViewport.update(width, height);
 		this.uiCamera.position.set(this.uiViewport.getMinWorldWidth() / 2, this.uiViewport.getMinWorldHeight() / 2, 0);
 
