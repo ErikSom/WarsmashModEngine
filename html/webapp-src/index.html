@@ -100,6 +100,82 @@
 		}
 		#maps-list .empty { color: #777; text-align: center; padding: 30px 10px; }
 		#maps-error { color: #f66; font-size: 13px; padding: 0 18px 14px; }
+
+		#version {
+			position: fixed; bottom: 8px; right: 12px;
+			color: #888; font-size: 11px; letter-spacing: 0.3px;
+			user-select: none;
+			z-index: 50;
+			cursor: pointer;
+			text-decoration: underline dotted #555;
+			text-underline-offset: 3px;
+		}
+		#version:hover { color: #c8d8f1; }
+
+		#changelog-modal {
+			position: fixed; inset: 0; z-index: 150;
+			background: rgba(0, 0, 0, 0.75);
+			display: none; align-items: center; justify-content: center;
+			padding: 24px;
+		}
+		.changelog-panel {
+			background: #1a2233; border: 1px solid #2a3a52; border-radius: 6px;
+			width: 100%; max-width: 720px; max-height: 100%;
+			display: flex; flex-direction: column;
+			box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+		}
+		.changelog-header {
+			display: flex; align-items: center; justify-content: space-between;
+			padding: 14px 18px; border-bottom: 1px solid #2a3a52;
+		}
+		.changelog-title { font-size: 16px; font-weight: 500; }
+		.changelog-body {
+			flex: 1; overflow-y: auto; padding: 16px 22px; line-height: 1.55;
+			color: #cfd8e6; font-size: 14px;
+		}
+		.changelog-body h1 { font-size: 18px; color: #eee; margin: 0 0 12px; }
+		.changelog-body h2 { font-size: 15px; color: #c8d8f1; margin: 18px 0 6px; }
+		.changelog-body p  { margin: 0 0 10px; color: #aab2c2; }
+		.changelog-body ul { margin: 0 0 14px; padding-left: 22px; }
+		.changelog-body li { margin: 3px 0; }
+		.changelog-body code {
+			background: #283146; color: #d8e8ff; padding: 1px 5px;
+			border-radius: 3px; font-size: 12px;
+		}
+
+		#splash {
+			position: fixed; inset: 0; z-index: 200;
+			display: none;
+			flex-direction: column; align-items: center; justify-content: center;
+			gap: 24px;
+			background: #000;
+		}
+		#splash img {
+			max-width: 60vw; max-height: 60vh;
+			object-fit: contain;
+			image-rendering: -webkit-optimize-contrast;
+			user-select: none; -webkit-user-drag: none;
+		}
+		#splash .label {
+			color: #c8d8f1; font-size: 16px; letter-spacing: 0.5px;
+			font-family: system-ui, -apple-system, sans-serif;
+		}
+		/* Animated ellipsis appended after "Initializing". 3-step keyframe so the
+		   dots cycle through 1 → 2 → 3 → 1 on a 1.2 s loop. */
+		#splash .label::after {
+			content: '';
+			display: inline-block;
+			width: 1.5em;
+			text-align: left;
+			animation: splash-dots 1.2s steps(4, end) infinite;
+		}
+		@keyframes splash-dots {
+			0%   { content: ''; }
+			25%  { content: '.'; }
+			50%  { content: '..'; }
+			75%  { content: '...'; }
+			100% { content: ''; }
+		}
 	</style>
 </head>
 <body oncontextmenu="return false">
@@ -111,9 +187,7 @@
 			<button id="resume-btn" style="display:none">Play game</button>
 			<label class="fakebtn" for="dir-input">Select Warcraft III folder</label>
 			<input id="dir-input" type="file" webkitdirectory multiple style="display:none">
-			<button id="start-btn" style="display:none">Start extraction and engine</button>
 			<button id="manage-maps-btn" class="secondary" style="display:none">Manage maps</button>
-			<button id="reset-btn" class="secondary" style="display:none">Clear cached assets</button>
 		</div>
 		<div id="progress"><div id="progress-bar"></div></div>
 		<div id="summary"></div>
@@ -139,6 +213,26 @@
 
 	<div id="canvas-wrap"><canvas id="canvas"></canvas></div>
 
+	<!-- Splash shown from "Play game" click until the engine-worker reports
+	     setScreen(WarsmashGdxMenuScreen) — bridges the few seconds of black
+	     screen during worker boot, MPQ open, GameUI/MenuUI construction. -->
+	<div id="splash">
+		<img id="splash-img" alt="">
+		<div class="label">Initializing</div>
+	</div>
+
+	<div id="version" title="View changelog"></div>
+
+	<div id="changelog-modal">
+		<div class="changelog-panel">
+			<div class="changelog-header">
+				<div class="changelog-title">Changelog</div>
+				<button id="changelog-close-btn" class="secondary">Close</button>
+			</div>
+			<div id="changelog-body" class="changelog-body">Loading…</div>
+		</div>
+	</div>
+
 	<script>
 		const READY_KEY = 'w3AssetsReady';
 		const COUNT_KEY = 'w3AssetsCount';
@@ -146,6 +240,8 @@
 		const ROOT_DIR = 'w3';
 		const CUSTOM_MAP_PREFIX = 'Maps/Upload/';
 		const BUILD_ID = String(Date.now());
+		// Bump on user-visible releases. Mirror the entry in html/CHANGELOG.md.
+		const VERSION = '0.1.0';
 
 		const el = (id) => document.getElementById(id);
 		const setStatus = (m) => { el('status').textContent = m; };
@@ -414,11 +510,10 @@
 		function refreshButtons(summary = summarizeIndex(readIndex())) {
 			const hasAssets = localStorage.getItem(READY_KEY) === '1';
 			const hasMap = summary.mapCount > 0;
-			el('start-btn').style.display = (!engineStarted && uploadSessionDirty && hasAssets) ? '' : 'none';
-			el('start-btn').disabled = !hasMap;
-			el('resume-btn').style.display = (!engineStarted && !uploadSessionDirty && hasAssets) ? '' : 'none';
+			// Single "Play game" button covers both fresh-upload and cached-resume
+			// flows now that there's no separate extraction step.
+			el('resume-btn').style.display = (!engineStarted && hasAssets) ? '' : 'none';
 			el('resume-btn').disabled = !hasMap;
-			el('reset-btn').style.display = hasAssets ? '' : 'none';
 			// Manage Maps only makes sense once the install is staged — the
 			// engine reads /extracted/, which is populated by the MPQ
 			// extraction worker.
@@ -464,9 +559,7 @@
 			el('progress').style.display = 'block';
 			el('progress-bar').style.width = '0%';
 			el('dir-input').disabled = true;
-			el('start-btn').disabled = true;
 			el('resume-btn').disabled = true;
-			el('reset-btn').disabled = true;
 			const replacing = options.replaceExisting || !uploadSessionDirty;
 			let success = false;
 
@@ -517,7 +610,6 @@
 				setSummary(summary.fileCount ? formatSummary(summary) : '');
 				refreshButtons(summary);
 				el('dir-input').disabled = false;
-				el('reset-btn').disabled = false;
 			}
 		}
 
@@ -526,22 +618,277 @@
 			acquireWakeLock();
 			el('overlay').style.display = 'none';
 			el('canvas-wrap').style.display = 'flex';
-			spawnExtractionWorker();
-			// jpeg-js decodes WC3's 4-channel JPEG BLPs preserving their BGRA alpha
-			// component, which the browser's native createImageBitmap/canvas path
-			// silently discards. BrowserImageBridge.decodeJpegBlpMipToRgba calls into
-			// this; it must be loaded before app.js runs.
-			const jpeg = document.createElement('script');
-			jpeg.src = versionedAsset('scripts/jpeg-js.js');
-			jpeg.charset = 'utf-8';
-			jpeg.onload = () => {
+			showSplash();
+
+			const canvas = el('canvas');
+			if (typeof OffscreenCanvas === 'undefined' || typeof canvas.transferControlToOffscreen !== 'function') {
+				setError('OffscreenCanvas is required but not supported by this browser.');
+				return;
+			}
+
+			// Pre-size at native CSS pixels (no DPR upscaling). HiDPI back-buffer
+			// rendering needs the engine's font generator to scale by dpr too —
+			// without it, buttons go 2× but text stays 15px and looks tiny. The
+			// engine-worker has a HiDpiWebGL30 wrapper ready to gate back on
+			// once that font path lands.
+			const cssW = canvas.clientWidth || window.innerWidth;
+			const cssH = canvas.clientHeight || window.innerHeight;
+			const offscreen = canvas.transferControlToOffscreen();
+			offscreen.width = Math.max(1, Math.round(cssW));
+			offscreen.height = Math.max(1, Math.round(cssH));
+
+			// Howler runs on the main thread. Worker postMessages audio.create
+			// (with bytes) and audio.play (by id); main builds Howl instances
+			// and drives playback. Loaded BEFORE worker spawn so the audio
+			// message handler is ready when the worker starts emitting events.
+			loadHowlerOnce(() => bootEngineWorker(canvas, offscreen, cssW, cssH));
+		}
+
+		function bootEngineWorker(canvas, offscreen, cssW, cssH) {
+			const worker = new Worker(versionedAsset('engine-worker-boot.js'));
+			worker.addEventListener('message', (e) => {
+				const m = e.data;
+				if (m && typeof m === 'object' && typeof m.kind === 'string' && m.kind.indexOf('audio.') === 0) {
+					handleAudioMessage(m);
+				}
+				else {
+					console.log('[engine]', m);
+					// First frame the user actually wants to see: the engine has
+					// installed WarsmashGdxMenuScreen. Drop the splash so the
+					// chains-drop intro is visible from frame 0.
+					if (typeof m === 'string' && m.indexOf('setScreen(WarsmashGdxMenuScreen)') !== -1) {
+						hideSplash();
+					}
+				}
+			});
+			worker.addEventListener('error', (e) => {
+				console.error('[engine error]', e.message || '(no message)', e);
+				setError('Engine worker error: ' + (e.message || '(no message)'));
+			});
+
+			worker.postMessage({
+				kind: 'init',
+				canvas: offscreen,
+				cssWidth: cssW,
+				cssHeight: cssH,
+				dpr: 1,
+			}, [offscreen]);
+
+			// Input proxy. Same shape as phase1-spike — the engine-worker reads
+			// these messages via its installed message handler and routes them
+			// into WorkerInput, which fans out to libGDX InputProcessor.
+			function relayPointer(name, e) {
+				const rect = canvas.getBoundingClientRect();
+				worker.postMessage({
+					kind: 'pointer', name,
+					x: Math.round(e.clientX - rect.left),
+					y: Math.round(e.clientY - rect.top),
+					button: e.button,
+				});
+			}
+			canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); relayPointer('down', e); });
+			canvas.addEventListener('pointerup', e => relayPointer('up', e));
+			canvas.addEventListener('pointermove', e => relayPointer('move', e));
+			canvas.addEventListener('pointercancel', e => relayPointer('up', e));
+			canvas.addEventListener('wheel', e => {
+				worker.postMessage({ kind: 'scroll', dx: e.deltaX, dy: e.deltaY });
+				e.preventDefault();
+			}, { passive: false });
+			window.addEventListener('keydown', e => {
+				worker.postMessage({ kind: 'key', name: 'down', keycode: domKeyToGdx(e), ch: e.key.length === 1 ? e.key : '' });
+			});
+			window.addEventListener('keyup', e => {
+				worker.postMessage({ kind: 'key', name: 'up', keycode: domKeyToGdx(e), ch: '' });
+			});
+		}
+
+		// ---- Changelog modal ----
+		let changelogLoaded = null;
+		function openChangelog() {
+			el('changelog-modal').style.display = 'flex';
+			if (!changelogLoaded) {
+				changelogLoaded = fetch(versionedAsset('CHANGELOG.md'), { cache: 'no-store' })
+					.then(r => r.ok ? r.text() : Promise.reject(r.status))
+					.then(text => { el('changelog-body').innerHTML = renderChangelog(text); })
+					.catch(err => { el('changelog-body').textContent = 'Failed to load changelog: ' + err; });
+			}
+		}
+		function closeChangelog() { el('changelog-modal').style.display = 'none'; }
+
+		// Tiny markdown converter — handles the subset CHANGELOG.md actually uses:
+		// `#`/`##` headings, `-` list items (with multi-line wrapped continuations),
+		// `**bold**`, `\`code\`` spans, blank-line paragraph breaks. Keeps us off
+		// a full markdown library for one file.
+		function renderChangelog(md) {
+			const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+			// Bold first, then code (code spans are leaf — bold inside them stays literal).
+			const inline = (s) => escape(s)
+				.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+				.replace(/`([^`]+)`/g, '<code>$1</code>');
+			const lines = md.split('\n');
+			const out = [];
+			let inList = false;
+			const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+			let i = 0;
+			while (i < lines.length) {
+				const line = lines[i].replace(/\s+$/, '');
+				if (line.startsWith('# ')) {
+					closeList();
+					out.push('<h1>' + inline(line.slice(2)) + '</h1>');
+					i++;
+				}
+				else if (line.startsWith('## ')) {
+					closeList();
+					out.push('<h2>' + inline(line.slice(3)) + '</h2>');
+					i++;
+				}
+				else if (line.startsWith('- ')) {
+					if (!inList) { out.push('<ul>'); inList = true; }
+					let item = line.slice(2);
+					i++;
+					// Coalesce indented continuation lines into this list item, the
+					// way real markdown treats wrapped bullets.
+					while (i < lines.length) {
+						const cont = lines[i];
+						if (cont.length === 0) break;
+						if (cont.startsWith('- ') || cont.startsWith('# ') || cont.startsWith('## ')) break;
+						if (!(cont.startsWith(' ') || cont.startsWith('\t'))) break;
+						item += ' ' + cont.replace(/^\s+/, '');
+						i++;
+					}
+					out.push('<li>' + inline(item) + '</li>');
+				}
+				else if (line === '') {
+					closeList();
+					i++;
+				}
+				else {
+					closeList();
+					out.push('<p>' + inline(line) + '</p>');
+					i++;
+				}
+			}
+			closeList();
+			return out.join('\n');
+		}
+
+		// ---- Splash overlay ----
+		function showSplash() {
+			const img = el('splash-img');
+			// Cache-bust like other versioned assets so a build bump invalidates
+			// any browser-cached splash.
+			img.src = versionedAsset('goblin-tinker.webp');
+			el('splash').style.display = 'flex';
+		}
+		function hideSplash() {
+			el('splash').style.display = 'none';
+		}
+
+		// ---- Howler / audio bridge ----
+		let howlerLoading = null;
+		function loadHowlerOnce(then) {
+			if (typeof Howl === 'function') { then(); return; }
+			if (howlerLoading) { howlerLoading.then(then); return; }
+			howlerLoading = new Promise((resolve) => {
 				const s = document.createElement('script');
-				s.src = versionedAsset('app.js');
-				s.charset = 'utf-8';
-				s.onload = () => { if (typeof main === 'function') main(); };
+				s.src = versionedAsset('scripts/howler.js');
+				s.onload = () => resolve();
+				s.onerror = () => { console.warn('howler.js failed to load — audio disabled'); resolve(); };
 				document.body.appendChild(s);
-			};
-			document.body.appendChild(jpeg);
+			});
+			howlerLoading.then(then);
+		}
+
+		// id -> { howl, pendingPlays: [...] }
+		const audioSounds = new Map();
+		function handleAudioMessage(m) {
+			if (typeof Howl !== 'function') return;
+			if (m.kind === 'audio.create')      handleAudioCreate(m);
+			else if (m.kind === 'audio.play')   handleAudioPlay(m);
+			else if (m.kind === 'audio.stop')   handleAudioStop(m);
+			else if (m.kind === 'audio.volume') handleAudioVolume(m);
+			else if (m.kind === 'audio.loop')   handleAudioLoop(m);
+		}
+		function handleAudioCreate(m) {
+			const blob = new Blob([m.bytes], { type: guessAudioMime(m.name) });
+			const url = URL.createObjectURL(blob);
+			const entry = { howl: null, pendingPlays: [] };
+			audioSounds.set(m.id, entry);
+			entry.howl = new Howl({
+				src: [url],
+				format: [guessAudioFormat(m.name)],
+				loop: false,
+				onload: () => {
+					for (const p of entry.pendingPlays) playOnHowl(entry, p);
+					entry.pendingPlays = [];
+				},
+				onloaderror: (_, err) => console.warn('howl load error', m.name, err),
+			});
+		}
+		function handleAudioPlay(m) {
+			const entry = audioSounds.get(m.id);
+			if (!entry) return;
+			if (entry.howl && entry.howl.state() === 'loaded') {
+				playOnHowl(entry, m);
+			}
+			else {
+				entry.pendingPlays.push(m);
+			}
+		}
+		function playOnHowl(entry, m) {
+			const id = entry.howl.play();
+			if (m.vol != null) entry.howl.volume(m.vol, id);
+			if (m.pitch && m.pitch !== 1) entry.howl.rate(m.pitch, id);
+			if (m.pan != null) entry.howl.stereo(m.pan, id);
+			if (m.loop) entry.howl.loop(true, id);
+		}
+		function handleAudioStop(m) {
+			const entry = audioSounds.get(m.id);
+			if (entry && entry.howl) entry.howl.stop();
+		}
+		function handleAudioVolume(m) {
+			const entry = audioSounds.get(m.id);
+			if (entry && entry.howl) entry.howl.volume(m.vol);
+		}
+		function handleAudioLoop(m) {
+			const entry = audioSounds.get(m.id);
+			if (entry && entry.howl) entry.howl.loop(!!m.loop);
+		}
+		function guessAudioMime(name) {
+			const lower = String(name || '').toLowerCase();
+			if (lower.endsWith('.mp3')) return 'audio/mpeg';
+			if (lower.endsWith('.wav')) return 'audio/wav';
+			if (lower.endsWith('.ogg')) return 'audio/ogg';
+			return 'application/octet-stream';
+		}
+		function guessAudioFormat(name) {
+			const lower = String(name || '').toLowerCase();
+			if (lower.endsWith('.mp3')) return 'mp3';
+			if (lower.endsWith('.wav')) return 'wav';
+			if (lower.endsWith('.ogg')) return 'ogg';
+			return 'mp3';
+		}
+
+		// Map a DOM KeyboardEvent to libGDX Input.Keys constants. Just enough
+		// for menu/gameplay basics — full table can grow as needed.
+		function domKeyToGdx(e) {
+			if (e.code && e.code.startsWith('Key')) return 29 + (e.code.charCodeAt(3) - 65); // A=29
+			if (e.code && e.code.startsWith('Digit')) return 7 + (e.code.charCodeAt(5) - 48);  // 0=7
+			switch (e.code) {
+				case 'Space': return 62;
+				case 'Enter': return 66;
+				case 'Escape': return 131;
+				case 'ArrowLeft': return 21;
+				case 'ArrowRight': return 22;
+				case 'ArrowUp': return 19;
+				case 'ArrowDown': return 20;
+				case 'ShiftLeft': case 'ShiftRight': return 59;
+				case 'ControlLeft': case 'ControlRight': return 129;
+				case 'AltLeft': case 'AltRight': return 57;
+				case 'Tab': return 61;
+				case 'Backspace': return 67;
+				default: return -1;
+			}
 		}
 
 		// Async: recursively list OPFS /extracted. Returns newline-joined
@@ -613,13 +960,7 @@
 						.finally(() => { e.target.value = ''; });
 				}
 			});
-			el('start-btn').addEventListener('click', startEngine);
 			el('resume-btn').addEventListener('click', startEngine);
-			el('reset-btn').addEventListener('click', async () => {
-				await clearOpfs();
-				uploadSessionDirty = false;
-				location.reload();
-			});
 			el('manage-maps-btn').addEventListener('click', openMapsModal);
 			el('maps-close-btn').addEventListener('click', closeMapsModal);
 			el('maps-modal').addEventListener('click', (e) => {
@@ -649,12 +990,49 @@
 			});
 		}
 
+		// One-time legacy cleanup: the previous main-thread engine extracted
+		// MPQ contents into OPFS /extracted/ and preloaded from there at boot.
+		// The engine-worker reads MPQs straight from /w3/ via SAH, so /extracted
+		// is just dead storage (~1 GB) for users coming from an older build.
+		// Drop it silently on every page load — quick if it's already gone,
+		// noticeable but harmless otherwise. Remove this block after a release
+		// or two once most users have migrated.
+		async function purgeLegacyExtracted() {
+			try {
+				const root = await navigator.storage.getDirectory();
+				try {
+					await root.getDirectoryHandle('extracted');
+				}
+				catch (e) {
+					return; // already absent — nothing to do
+				}
+				setStatus('Cleaning up legacy cached files…');
+				await root.removeEntry('extracted', { recursive: true });
+				setStatus('');
+			}
+			catch (e) {
+				console.warn('legacy /extracted cleanup failed:', e);
+			}
+		}
+
 		(async function init() {
+			el('version').textContent = 'v' + VERSION;
+			el('version').addEventListener('click', openChangelog);
+			el('changelog-close-btn').addEventListener('click', closeChangelog);
+			el('changelog-modal').addEventListener('click', (e) => {
+				if (e.target === el('changelog-modal')) closeChangelog();
+			});
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape' && el('changelog-modal').style.display === 'flex') {
+					closeChangelog();
+				}
+			});
 			wireUI();
 			if (!('storage' in navigator) || !navigator.storage.getDirectory) {
 				setError('OPFS is not supported in this browser.');
 				return;
 			}
+			await purgeLegacyExtracted();
 			if (localStorage.getItem(READY_KEY) === '1') {
 				const index = readIndex();
 				const summary = summarizeIndex(index);
