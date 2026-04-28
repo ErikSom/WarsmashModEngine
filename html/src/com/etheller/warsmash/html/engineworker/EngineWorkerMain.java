@@ -268,8 +268,6 @@ public final class EngineWorkerMain {
 		Gdx.files = new WorkerFiles(compound);
 		postMessage("engine-worker: Gdx.files wired (" + sources.size() + " MPQs"
 				+ (looseMaps == null ? "" : " + " + looseMaps.getListfile().size() + " loose files") + ")");
-		demoFileRead(compound);
-		demoMapParse(compound);
 	}
 
 	/**
@@ -413,82 +411,6 @@ public final class EngineWorkerMain {
 			}
 		}
 		return null;
-	}
-
-	/**
-	 * Reads a known-present text asset through the just-installed
-	 * {@code Gdx.files} chain to prove the data path round-trips. MPQs use
-	 * backslash separators internally; we try both spellings since the engine
-	 * code mixes them.
-	 */
-	private static void demoFileRead(final DataSource fallback) {
-		final String[] candidates = {
-				"Units\\CampaignUnitStrings.txt",
-				"Units/CampaignUnitStrings.txt",
-				"UI\\FrameDef\\UI\\EscMenuTemplates.fdf",
-				"UI\\Glues.txt",
-		};
-		for (final String path : candidates) {
-			try {
-				final com.badlogic.gdx.files.FileHandle h = Gdx.files.internal(path);
-				if (!h.exists()) {
-					continue;
-				}
-				final byte[] bytes = h.readBytes();
-				postMessage("engine-worker: demo read " + path + " — " + bytes.length + " bytes");
-				int end = Math.min(bytes.length, 80);
-				for (int i = 0; i < Math.min(bytes.length, 200); i++) {
-					if (bytes[i] == '\n' || bytes[i] == '\r') { end = i; break; }
-				}
-				postMessage("engine-worker: first line: "
-						+ new String(bytes, 0, end, java.nio.charset.StandardCharsets.UTF_8));
-				return;
-			}
-			catch (final Throwable t) {
-				postMessage("engine-worker: demo " + path + " threw " + t);
-			}
-		}
-		postMessage("engine-worker: demo read found no candidate (data source has "
-				+ fallback.getListfile().size() + " entries)");
-	}
-
-	/**
-	 * Construct the engine's {@link com.etheller.warsmash.parsers.w3x.War3Map}
-	 * model class against the worker-side MPQ data source and parse a real
-	 * map's {@code war3map.w3i}. This proves engine-asset model classes work
-	 * in worker context — the path forward toward a full engine boot.
-	 *
-	 * <p>Picks Echo Isles (a stock TFT map known to live in War3x.mpq); reports
-	 * the parsed map's display name + player slot count.
-	 */
-	private static void demoMapParse(final DataSource compound) {
-		final String[] mapCandidates = {
-				"Maps\\FrozenThrone\\(2)EchoIsles.w3x",
-				"Maps/FrozenThrone/(2)EchoIsles.w3x",
-				"Maps\\(2)EchoIsles.w3x",
-		};
-		String mapPath = null;
-		for (final String c : mapCandidates) {
-			if (compound.has(c)) { mapPath = c; break; }
-		}
-		if (mapPath == null) {
-			postMessage("engine-worker: map demo — Echo Isles not in MPQ; skipping");
-			return;
-		}
-		try {
-			final com.etheller.warsmash.parsers.w3x.War3Map map =
-					new com.etheller.warsmash.parsers.w3x.War3Map(compound, mapPath);
-			final com.etheller.warsmash.parsers.w3x.w3i.War3MapW3i info = map.readMapInformation();
-			postMessage("engine-worker: parsed map " + mapPath
-					+ " — name=\"" + info.getName() + "\""
-					+ ", players=" + info.getPlayers().size()
-					+ ", tileset=" + info.getTileset()
-					+ ", " + info.getCameraBounds()[2] + "x" + info.getCameraBounds()[3]);
-		}
-		catch (final Throwable t) {
-			postMessage("engine-worker: map demo FAILED — " + t);
-			t.printStackTrace();
-		}
 	}
 
 	/**
