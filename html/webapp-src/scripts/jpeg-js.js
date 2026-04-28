@@ -1098,6 +1098,13 @@ if (typeof module !== 'undefined') {
 	// JPEGs as BGRA (the WC3 BLP convention) instead of jpeg-js's default CMYK
 	// → RGB conversion.
 	window['jpeg-js'].JpegImage = JpegImage;
+} else if (typeof self !== 'undefined') {
+	// Warsmash patch: worker context (engine-in-worker port). Attach to
+	// `self` since `window` doesn't exist. BrowserImageBridge looks the
+	// global up via `self['jpeg-js']`, which works in both contexts.
+	self['jpeg-js'] = self['jpeg-js'] || {};
+	self['jpeg-js'].decode = decode;
+	self['jpeg-js'].JpegImage = JpegImage;
 }
 
 function decode(jpegData, userOpts = {}) {

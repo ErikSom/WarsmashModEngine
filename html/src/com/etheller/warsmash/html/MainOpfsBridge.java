@@ -31,7 +31,12 @@ public final class MainOpfsBridge {
 	}
 
 	@JSBody(params = { "ok", "err" },
-			script = "window.w3MainListExtractedAsync().then(ok)"
+			// Guard window access — when the engine code is hosted by the
+			// Web Worker (engine-in-worker port), window is undefined and any
+			// bare reference throws ReferenceError before reaching the catch.
+			script = "if (typeof window === 'undefined' || !window.w3MainListExtractedAsync)"
+					+ "  { err('MainOpfsBridge unavailable in this context'); return; }"
+					+ "window.w3MainListExtractedAsync().then(ok)"
 					+ ".catch(function(e) { err(e && e.message ? e.message : String(e)); });")
 	private static native void listExtractedImpl(StringCallback ok, StringCallback err);
 
@@ -52,7 +57,9 @@ public final class MainOpfsBridge {
 	}
 
 	@JSBody(params = { "path", "ok", "err" },
-			script = "window.w3MainReadExtractedAsync(path).then(ok)"
+			script = "if (typeof window === 'undefined' || !window.w3MainReadExtractedAsync)"
+					+ "  { err('MainOpfsBridge unavailable in this context'); return; }"
+					+ "window.w3MainReadExtractedAsync(path).then(ok)"
 					+ ".catch(function(e) { err(e && e.message ? e.message : String(e)); });")
 	private static native void readExtractedImpl(String path, Int8ArrayCallback ok, StringCallback err);
 

@@ -30,7 +30,7 @@ final class BrowserImageBridge {
 
 	/**
 	 * Decode a JPEG-encoded BLP mip directly to raw RGBA8888 pixels (width *
-	 * height * 4 bytes). Invokes {@code window['jpeg-js'].JpegImage} to parse
+	 * height * 4 bytes). Invokes {@code self['jpeg-js'].JpegImage} to parse
 	 * the JPEG, then repacks the decoded components according to the BLP's
 	 * conventions:
 	 * <ul>
@@ -83,10 +83,10 @@ final class BrowserImageBridge {
 	@JSBody(params = { "jpegBytes", "alphaBytes", "alphaDepth", "pictureType", "width", "height" },
 			script = ""
 					+ "try {"
-					+ "  if (!window['jpeg-js'] || !window['jpeg-js'].JpegImage) { return null; }"
+					+ "  if (!self['jpeg-js'] || !self['jpeg-js'].JpegImage) { return null; }"
 					+ "  var jpeg = new Uint8Array(jpegBytes.buffer, jpegBytes.byteOffset, jpegBytes.byteLength);"
 					+ "  var alpha = alphaBytes ? new Uint8Array(alphaBytes.buffer, alphaBytes.byteOffset, alphaBytes.byteLength) : new Uint8Array(0);"
-					+ "  var JpegImage = window['jpeg-js'].JpegImage;"
+					+ "  var JpegImage = self['jpeg-js'].JpegImage;"
 					+ "  var decoder = new JpegImage();"
 					+ "  decoder.opts = { useTArray: true, formatAsRGBA: true, colorTransform: false,"
 					+ "                    tolerantDecoding: true, maxResolutionInMP: 100, maxMemoryUsageInMB: 64 };"
@@ -207,12 +207,12 @@ final class BrowserImageBridge {
 					// under blend mode. jpeg-js sees the 4 components and
 					// preserves alpha.
 					+ "try {"
-					+ "  if (!window['jpeg-js'] || !window['jpeg-js'].JpegImage) {"
+					+ "  if (!self['jpeg-js'] || !self['jpeg-js'].JpegImage) {"
 					+ "    err('jpeg-js library not loaded'); return;"
 					+ "  }"
 					+ "  var jpeg = new Uint8Array(jpegBytes.buffer, jpegBytes.byteOffset, jpegBytes.byteLength);"
 					+ "  var alpha = alphaBytes ? new Uint8Array(alphaBytes.buffer, alphaBytes.byteOffset, alphaBytes.byteLength) : new Uint8Array(0);"
-					+ "  var JpegImage = window['jpeg-js'].JpegImage;"
+					+ "  var JpegImage = self['jpeg-js'].JpegImage;"
 					+ "  var decoder = new JpegImage();"
 					+ "  decoder.opts = { useTArray: true, formatAsRGBA: true, colorTransform: false,"
 					+ "                    tolerantDecoding: true, maxResolutionInMP: 100, maxMemoryUsageInMB: 512 };"

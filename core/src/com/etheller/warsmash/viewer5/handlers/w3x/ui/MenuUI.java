@@ -153,6 +153,13 @@ public class MenuUI {
 	private final boolean quitting = false;
 
 	private MenuState menuState;
+	/** Tracks whether the GOING_TO_MAIN_MENU branch has fired before, so we
+	 *  don't redundantly restart "MainMenu Birth" on the very first transition
+	 *  out of boot — main() already started Birth playing at construction time.
+	 *  Subsequent transitions (e.g. returning from Battle.net, which sets a
+	 *  generic "Birth" before flipping state) still need the restart to swap
+	 *  to the main-menu-specific Birth animation. */
+	private boolean mainMenuBirthInitiated;
 
 	private UIFrame singlePlayerMenu;
 	private UIFrame singlePlayerMainPanel;
@@ -2019,8 +2026,17 @@ public class MenuUI {
 				&& (!this.battleNetUI.getDoors().isVisible() || this.battleNetUI.getDoors().isSequenceEnded())) {
 			switch (this.menuState) {
 			case GOING_TO_MAIN_MENU:
-				this.glueSpriteLayerTopLeft.setSequence("MainMenu Birth");
-				this.glueSpriteLayerTopRight.setSequence("MainMenu Birth");
+				if (this.mainMenuBirthInitiated) {
+					// Re-entering the main menu (typically from Battle.net,
+					// which sets a generic "Birth" first then transitions to
+					// GOING_TO_MAIN_MENU). Swap to the main-menu Birth.
+					this.glueSpriteLayerTopLeft.setSequence("MainMenu Birth");
+					this.glueSpriteLayerTopRight.setSequence("MainMenu Birth");
+				}
+				// First entry: main() already set "MainMenu Birth" and it just
+				// finished playing. Don't restart it — let MAIN_MENU transition
+				// straight to Stand on the next isSequenceEnded() tick.
+				this.mainMenuBirthInitiated = true;
 				if (this.battleNetUI.getDoors().isVisible()) {
 					this.battleNetUI.getDoors().setVisible(false);
 					this.battleNetUI.setVisible(false);

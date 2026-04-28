@@ -49,17 +49,11 @@ public final class WorkerMain {
 		try {
 			if (OpfsBridge.readExtracted(READY_MARKER) != null) {
 				postMessage("worker: extraction already complete — /extracted is ready");
-				// Stale /w3 from an earlier upload wastes storage once extraction
-				// has landed. Best-effort drop; ignore errors.
-				if (OpfsBridge.findMpqFiles().length > 0) {
-					try {
-						OpfsBridge.dropUpload();
-						postMessage("worker: dropped leftover /w3 upload tree");
-					}
-					catch (final Throwable t) {
-						postMessage("worker: dropUpload error: " + t.getMessage());
-					}
-				}
+				// Keep /w3 around: the engine-in-worker port reads MPQs straight
+				// from there via SAH-backed MpqDataSource, skipping the
+				// /extracted preload entirely. Storage cost is roughly the same
+				// (~1.4 GB MPQs vs ~1 GB extracted) and once Phase 4 lands we
+				// can drop /extracted instead. Until then, both trees coexist.
 				return;
 			}
 		}
@@ -107,13 +101,8 @@ public final class WorkerMain {
 			postMessage("worker: mark-ready error: " + t.getMessage());
 		}
 
-		try {
-			OpfsBridge.dropUpload();
-			postMessage("worker: dropped /w3 upload tree to reclaim storage");
-		}
-		catch (final Throwable t) {
-			postMessage("worker: dropUpload error: " + t.getMessage());
-		}
+		// Intentionally leave /w3 in place — the engine-in-worker port reads
+		// MPQs from there via SAH. See note above.
 	}
 
 	private static int extractMpq(final String path) throws Exception {
