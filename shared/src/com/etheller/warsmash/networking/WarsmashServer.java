@@ -2,7 +2,6 @@ package com.etheller.warsmash.networking;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,10 +16,16 @@ import net.warsmash.uberserver.GamingNetwork;
 public class WarsmashServer implements ClientToServerListener {
 	private static final boolean VERBOSE_LOGGING = false;
 	private static final int MAGIC_DELAY_OFFSET = 4; // 4
-	private final OrderedUdpServer udpServer;
-	private final Set<SocketAddress> socketAddressesKnown = new HashSet<>();
+	// Field type widened to MessageSender so non-UDP transports can plug in.
+	// The "address" type used by the writer / per-client tracking is Object —
+	// see the rationale on UdpServerListener.parse: keeps java.net.SocketAddress
+	// out of the TeaVM web reachability graph. Concrete types under the hood
+	// are still SocketAddress on desktop and a custom marker on web; the
+	// engine only treats them as opaque map keys.
+	private final MessageSender transport;
+	private final Set<Object> socketAddressesKnown = new HashSet<>();
 	private final Map<Long, Integer> sessionTokenToPermittedSlot;
-	private final Map<SocketAddress, Integer> clientToTurnFinished = new HashMap<>();
+	private final Map<Object, Integer> clientToTurnFinished = new HashMap<>();
 	private final List<Runnable> turnActions = new ArrayList<>();
 	private final WarsmashServerWriter writer;
 	private int currentTurnTick = MAGIC_DELAY_OFFSET;
@@ -28,23 +33,58 @@ public class WarsmashServer implements ClientToServerListener {
 	private long lastServerHeartbeatTime = 0;
 	private int joinCount = 0;
 
+	/**
+	 * Desktop convenience constructor — opens a UDP socket on {@code port} and
+	 * wires it to a {@link WarsmashServerParser} that delegates back to this
+	 * server. Pulls {@code java.net.*} into the reachability graph; do NOT call
+	 * this from the web build — use the transport-injection constructor below.
+	 */
 	public WarsmashServer(final int port, final Map<Long, Integer> sessionTokenToPermittedSlot) throws IOException {
-		this.udpServer = new OrderedUdpServer(port, new WarsmashServerParser(this));
-		this.writer = new WarsmashServerWriter(this.udpServer, this.socketAddressesKnown);
+		final OrderedUdpServer udp = new OrderedUdpServer(port, new WarsmashServerParser(this));
+		this.transport = udp;
+		this.writer = new WarsmashServerWriter(udp, this.socketAddressesKnown);
 		this.sessionTokenToPermittedSlot = sessionTokenToPermittedSlot;
 	}
 
-	// Useful for if they pass 0 as port and get an auto-assigned one
+	/**
+	 * Transport-injection constructor for non-UDP backends (currently the web
+	 * build's {@code WebRtcOrderedServer}). The caller is responsible for
+	 * breaking the construction cycle:
+	 * <pre>
+	 *   WarsmashServerParser parser = new WarsmashServerParser();
+	 *   WebRtcOrderedServer transport = new WebRtcOrderedServer(parser);
+	 *   WarsmashServer server = new WarsmashServer(transport, sessionTokenToPermittedSlot);
+	 *   parser.setListener(server);
+	 * </pre>
+	 */
+	public WarsmashServer(final MessageSender transport, final Map<Long, Integer> sessionTokenToPermittedSlot) {
+		this.transport = transport;
+		this.writer = new WarsmashServerWriter(transport, this.socketAddressesKnown);
+		this.sessionTokenToPermittedSlot = sessionTokenToPermittedSlot;
+	}
+
+	// Useful for if they pass 0 as port and get an auto-assigned one.
+	// Only meaningful for UDP transports — returns -1 for transports that
+	// don't bind a port (e.g. WebRTC, where peers are addressed by netlib id).
 	public int getPort() {
-		return this.udpServer.getPort();
+		return (this.transport instanceof OrderedUdpServer) ? ((OrderedUdpServer) this.transport).getPort() : -1;
 	}
 
+	// Only meaningful for UDP transports — returns null for transports that
+	// don't have an OS-level local address.
 	public InetSocketAddress getLocalAddress() {
-		return this.udpServer.getLocalAddress();
+		return (this.transport instanceof OrderedUdpServer) ? ((OrderedUdpServer) this.transport).getLocalAddress() : null;
 	}
 
+	/**
+	 * Start the background receive loop for transports that need one (i.e.
+	 * desktop's {@link OrderedUdpServer}). Event-driven transports (WebRTC
+	 * datachannels are pushed to us by the browser) make this a no-op.
+	 */
 	public void startThread() {
-		new Thread(this.udpServer).start();
+		if (this.transport instanceof Runnable) {
+			new Thread((Runnable) this.transport).start();
+		}
 	}
 
 	public void startGame() {
@@ -61,7 +101,7 @@ public class WarsmashServer implements ClientToServerListener {
 		this.currentTurnTick++;
 	}
 
-	private int getPlayerIndex(final SocketAddress sourceAddress, final long sessionToken) {
+	private int getPlayerIndex(final Object sourceAddress, final long sessionToken) {
 		final Integer permittedSlot = this.sessionTokenToPermittedSlot.get(sessionToken);
 		if (permittedSlot != null) {
 			this.socketAddressesKnown.add(sourceAddress);
@@ -72,7 +112,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void joinGame(final SocketAddress sourceAddress, final long sessionToken) {
+	public void joinGame(final Object sourceAddress, final long sessionToken) {
 		System.out.println("joinGame " + sourceAddress);
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
@@ -88,7 +128,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void issueTargetOrder(final SocketAddress sourceAddress, final long sessionToken, final int unitHandleId,
+	public void issueTargetOrder(final Object sourceAddress, final long sessionToken, final int unitHandleId,
 			final int abilityHandleId, final int orderId, final int targetHandleId, final boolean queue) {
 		System.out.println("issueTargetOrder from " + sourceAddress);
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
@@ -106,7 +146,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void issuePointOrder(final SocketAddress sourceAddress, final long sessionToken, final int unitHandleId,
+	public void issuePointOrder(final Object sourceAddress, final long sessionToken, final int unitHandleId,
 			final int abilityHandleId, final int orderId, final float x, final float y, final boolean queue) {
 		System.out.println("issuePointOrder from " + sourceAddress);
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
@@ -124,7 +164,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void issueDropItemAtPointOrder(final SocketAddress sourceAddress, final long sessionToken,
+	public void issueDropItemAtPointOrder(final Object sourceAddress, final long sessionToken,
 			final int unitHandleId, final int abilityHandleId, final int orderId, final int targetHandleId,
 			final float x, final float y, final boolean queue) {
 		System.out.println("issueDropItemAtPointOrder from " + sourceAddress);
@@ -143,7 +183,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void issueDropItemAtTargetOrder(final SocketAddress sourceAddress, final long sessionToken,
+	public void issueDropItemAtTargetOrder(final Object sourceAddress, final long sessionToken,
 			final int unitHandleId, final int abilityHandleId, final int orderId, final int targetHandleId,
 			final int targetHeroHandleId, final boolean queue) {
 		System.out.println("issueDropItemAtTargetOrder from " + sourceAddress);
@@ -162,7 +202,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void issueImmediateOrder(final SocketAddress sourceAddress, final long sessionToken, final int unitHandleId,
+	public void issueImmediateOrder(final Object sourceAddress, final long sessionToken, final int unitHandleId,
 			final int abilityHandleId, final int orderId, final boolean queue) {
 		System.out.println("issueImmediateOrder from " + sourceAddress);
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
@@ -180,7 +220,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void unitCancelTrainingItem(final SocketAddress sourceAddress, final long sessionToken,
+	public void unitCancelTrainingItem(final Object sourceAddress, final long sessionToken,
 			final int unitHandleId, final int cancelIndex) {
 		System.out.println("unitCancelTrainingItem from " + sourceAddress);
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
@@ -197,7 +237,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void issueGuiPlayerEvent(final SocketAddress sourceAddress, final long sessionToken, final int eventId) {
+	public void issueGuiPlayerEvent(final Object sourceAddress, final long sessionToken, final int eventId) {
 		System.out.println("issueGuiPlayerEvent from " + sourceAddress);
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
@@ -213,7 +253,7 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	@Override
-	public void finishedTurn(final SocketAddress sourceAddress, final long sessionToken, final int clientGameTurnTick) {
+	public void finishedTurn(final Object sourceAddress, final long sessionToken, final int clientGameTurnTick) {
 		final int gameTurnTick = clientGameTurnTick + MAGIC_DELAY_OFFSET;
 		if (VERBOSE_LOGGING) {
 			System.out.println("finishedTurn(" + gameTurnTick + ") from " + sourceAddress);
@@ -224,7 +264,7 @@ public class WarsmashServer implements ClientToServerListener {
 		}
 		this.clientToTurnFinished.put(sourceAddress, gameTurnTick);
 		boolean allDone = true;
-		for (final SocketAddress clientAddress : this.socketAddressesKnown) {
+		for (final Object clientAddress : this.socketAddressesKnown) {
 			final Integer turnFinishedValue = this.clientToTurnFinished.get(clientAddress);
 			if ((turnFinishedValue == null) || (turnFinishedValue < gameTurnTick)) {
 				allDone = false;

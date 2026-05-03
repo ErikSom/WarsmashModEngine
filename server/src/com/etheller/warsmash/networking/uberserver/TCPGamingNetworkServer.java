@@ -42,7 +42,7 @@ public class TCPGamingNetworkServer {
 
 		this.channelOpener.openUDPServerChannel(GamingNetwork.PORT, new UdpServerListener() {
 			@Override
-			public void parse(SocketAddress sourceAddress, ByteBuffer buffer) {
+			public void parse(Object sourceAddress, ByteBuffer buffer) {
 
 			}
 		}, new ExceptionListener() {

@@ -4,14 +4,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-import net.warsmash.networking.udp.OrderedUdpClient;
+import net.warsmash.networking.udp.OrderedUdpCommuncation;
 
 public class WarsmashClientWriter {
-	private final OrderedUdpClient client;
+	// Type widened from OrderedUdpClient (UDP-specific) to its abstract parent
+	// so non-UDP transports — currently only WebRtcOrderedClient on the web
+	// build — can plug in without subclassing OrderedUdpClient (which would
+	// drag java.net.* into the TeaVM reachability graph).
+	private final OrderedUdpCommuncation client;
 	private final ByteBuffer sendBuffer = ByteBuffer.allocate(1024).order(ByteOrder.BIG_ENDIAN);
 	private final long sessionToken;
 
-	public WarsmashClientWriter(final OrderedUdpClient client, final long sessionToken) {
+	public WarsmashClientWriter(final OrderedUdpCommuncation client, final long sessionToken) {
 		this.client = client;
 		this.sessionToken = sessionToken;
 	}

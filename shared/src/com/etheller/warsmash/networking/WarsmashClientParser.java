@@ -5,9 +5,27 @@ import java.nio.ByteBuffer;
 import net.warsmash.networking.udp.OrderedUdpClientListener;
 
 public class WarsmashClientParser implements OrderedUdpClientListener {
-	private final ServerToClientListener listener;
+	private ServerToClientListener listener;
 
 	public WarsmashClientParser(final ServerToClientListener listener) {
+		this.listener = listener;
+	}
+
+	/**
+	 * No-arg constructor for callers that need to break the construction
+	 * cycle between {@link WarsmashClient}, this parser, and the underlying
+	 * transport ({@code OrderedUdpClient} on desktop,
+	 * {@code WebRtcOrderedClient} on web). Use {@link #setListener} once the
+	 * {@link WarsmashClient} is constructed.
+	 */
+	public WarsmashClientParser() {
+	}
+
+	/**
+	 * Late-binds the listener. Pairs with the no-arg constructor; ignored if
+	 * a listener was already set via the legacy constructor.
+	 */
+	public void setListener(final ServerToClientListener listener) {
 		this.listener = listener;
 	}
 

@@ -7,7 +7,9 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class OrderedUdpServer implements UdpServerListener, Runnable {
+import com.etheller.warsmash.networking.MessageSender;
+
+public class OrderedUdpServer implements UdpServerListener, Runnable, MessageSender {
 	private final OrderedUdpServerListener listener;
 	private final UdpServer udpServer;
 	private final Map<SocketAddress, OrderedKnownClient> addrToClient = new HashMap<>();
@@ -26,12 +28,18 @@ public class OrderedUdpServer implements UdpServerListener, Runnable {
 	}
 
 	@Override
-	public void parse(final SocketAddress sourceAddress, final ByteBuffer buffer) {
-		getClient(sourceAddress).parse(buffer);
+	public void parse(final Object sourceAddress, final ByteBuffer buffer) {
+		// UdpServer (the desktop UDP impl) hands us SocketAddress values;
+		// the Object widening at the interface boundary is purely so the
+		// shared interface doesn't drag java.net.SocketAddress into the
+		// TeaVM reachability graph. Internally we keep the SocketAddress
+		// shape because the underlying DatagramChannel.send() requires it.
+		getClient((SocketAddress) sourceAddress).parse(buffer);
 	}
 
-	public void send(final SocketAddress destination, final ByteBuffer buffer) throws IOException {
-		getClient(destination).send(buffer);
+	@Override
+	public void send(final Object destination, final ByteBuffer buffer) throws IOException {
+		getClient((SocketAddress) destination).send(buffer);
 	}
 
 	private OrderedKnownClient getClient(final SocketAddress sourceAddress) {

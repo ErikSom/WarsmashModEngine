@@ -1,0 +1,23 @@
+{
+  "name": "warsmash-web-src",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Modern-bundled web sources for the Warsmash HTML5 port. Parcel bundles HTML+JS+TS here; output goes to ../build/dist/webapp/. Coexists with the legacy hand-copied webapp-src/ during the transition.",
+  "scripts": {
+    "dev": "parcel serve multiplayer-test.html --port 8001",
+    "build:test": "parcel build multiplayer-test.html --dist-dir ../build/dist/webapp/ --public-url ./ --no-cache",
+    "build:bridge": "parcel build poki-bridge.ts --dist-dir ../build/dist/webapp/ --public-url ./ --no-cache --no-content-hash --no-source-maps",
+    "build": "npm run build:test && npm run build:bridge"
+  },
+  "targets": {
+    "default": {
+      "context": "browser"
+    }
+  },
+  "dependencies": {
+    "@poki/netlib": "0.0.18"
+  },
+  "devDependencies": {
+    "parcel": "^2.15.4"
+  }
+}

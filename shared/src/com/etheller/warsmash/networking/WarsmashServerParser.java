@@ -1,21 +1,34 @@
 package com.etheller.warsmash.networking;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 
 import net.warsmash.networking.udp.OrderedUdpServerListener;
 
 public class WarsmashServerParser implements OrderedUdpServerListener {
 
-	private final ClientToServerListener listener;
+	private ClientToServerListener listener;
 
 	public WarsmashServerParser(final ClientToServerListener clientToServerListener) throws IOException {
 		this.listener = clientToServerListener;
 	}
 
+	/**
+	 * No-arg constructor for callers that need to break the construction
+	 * cycle between {@link WarsmashServer}, this parser, and the underlying
+	 * transport. Pair with {@link #setListener} after the {@link WarsmashServer}
+	 * exists. Mirrors the same trick on the client side
+	 * ({@link WarsmashClientParser}).
+	 */
+	public WarsmashServerParser() {
+	}
+
+	public void setListener(final ClientToServerListener listener) {
+		this.listener = listener;
+	}
+
 	@Override
-	public void parse(final SocketAddress sourceAddress, final ByteBuffer buffer) {
+	public void parse(final Object sourceAddress, final ByteBuffer buffer) {
 		final int initialLimit = buffer.limit();
 		try {
 			while (buffer.hasRemaining()) {
@@ -129,7 +142,7 @@ public class WarsmashServerParser implements OrderedUdpServerListener {
 	}
 
 	@Override
-	public void cantReplay(final SocketAddress sourceAddress, final int seqNo) {
+	public void cantReplay(final Object sourceAddress, final int seqNo) {
 		throw new IllegalStateException("Cant replay " + seqNo + " to " + sourceAddress + " !");
 	}
 }

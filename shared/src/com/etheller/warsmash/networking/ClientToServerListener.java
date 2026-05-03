@@ -1,30 +1,34 @@
 package com.etheller.warsmash.networking;
 
-import java.net.SocketAddress;
-
 public interface ClientToServerListener {
-	void joinGame(SocketAddress sourceAddress, long sessionToken);
+	// `sourceAddress` widened from java.net.SocketAddress to Object so the
+	// shared protocol code doesn't pull java.net.* into the TeaVM
+	// reachability graph (web build's WebRtcOrderedServer uses a custom
+	// marker class as the per-peer key). Desktop's OrderedUdpServer
+	// continues to pass real SocketAddress instances via these methods.
+	// See UdpServerListener.parse for the wider rationale.
+	void joinGame(Object sourceAddress, long sessionToken);
 
-	void issueTargetOrder(SocketAddress sourceAddress, long sessionToken, int unitHandleId, int abilityHandleId,
+	void issueTargetOrder(Object sourceAddress, long sessionToken, int unitHandleId, int abilityHandleId,
 			int orderId, int targetHandleId, boolean queue);
 
-	void issuePointOrder(SocketAddress sourceAddress, long sessionToken, int unitHandleId, int abilityHandleId,
+	void issuePointOrder(Object sourceAddress, long sessionToken, int unitHandleId, int abilityHandleId,
 			int orderId, float x, float y, boolean queue);
 
-	void issueDropItemAtPointOrder(SocketAddress sourceAddress, long sessionToken, int unitHandleId,
+	void issueDropItemAtPointOrder(Object sourceAddress, long sessionToken, int unitHandleId,
 			int abilityHandleId, int orderId, int targetHandleId, float x, float y, final boolean queue);
 
-	void issueDropItemAtTargetOrder(SocketAddress sourceAddress, long sessionToken, int unitHandleId,
+	void issueDropItemAtTargetOrder(Object sourceAddress, long sessionToken, int unitHandleId,
 			int abilityHandleId, int orderId, int targetHandleId, int targetHeroHandleId, final boolean queue);
 
-	void issueImmediateOrder(SocketAddress sourceAddress, long sessionToken, int unitHandleId, int abilityHandleId,
+	void issueImmediateOrder(Object sourceAddress, long sessionToken, int unitHandleId, int abilityHandleId,
 			int orderId, boolean queue);
 
-	void unitCancelTrainingItem(SocketAddress sourceAddress, long sessionToken, int unitHandleId, int cancelIndex);
+	void unitCancelTrainingItem(Object sourceAddress, long sessionToken, int unitHandleId, int cancelIndex);
 
-	void issueGuiPlayerEvent(SocketAddress sourceAddress, long sessionToken, int eventId);
+	void issueGuiPlayerEvent(Object sourceAddress, long sessionToken, int eventId);
 
-	void finishedTurn(SocketAddress sourceAddress, long sessionToken, int gameTurnTick);
+	void finishedTurn(Object sourceAddress, long sessionToken, int gameTurnTick);
 
 	void framesSkipped(long sessionToken, int nFramesSkipped);
 

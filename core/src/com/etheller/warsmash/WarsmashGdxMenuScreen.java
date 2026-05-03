@@ -71,6 +71,17 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	private final DataTable warsmashIni;
 	private Scene uiScene;
 	private MenuUI menuUI;
+
+	/**
+	 * Web/multiplayer hook: lets the boot layer bypass the uberserver-mediated
+	 * lobby flow and call {@link MenuUI#startMultiplayerGameDirect} directly.
+	 * Returns null until {@link #show()} has run (which is when {@code menuUI}
+	 * gets constructed).
+	 */
+	public MenuUI getMenuUI() {
+		return this.menuUI;
+	}
+
 	private final WarsmashGdxMultiScreenGame game;
 	private boolean hasPlayedStandHack = false;
 	private boolean loaded = false;

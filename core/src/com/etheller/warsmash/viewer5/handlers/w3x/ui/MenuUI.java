@@ -2764,4 +2764,73 @@ public class MenuUI {
 										// hardcode
 										// this
 	}
+
+	/**
+	 * Direct-injection variant of the {@code gameLobbyStartGame} handler in
+	 * the BattleNet UI listener (around line 731 in this file). Bypasses the
+	 * uberserver/{@code battleNetUI} chatroom flow so the web build's
+	 * Poki-Netlib P2P path can drive a multiplayer game start with all the
+	 * lobby state (slot maps, session token, host transport) supplied by
+	 * the caller. Desktop callers should keep using the uberserver-mediated
+	 * path.
+	 *
+	 * <p>Loads the {@link com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig}
+	 * internally from {@code mapPath} (via the same
+	 * {@link #loadAndCacheMapConfigs} flow used elsewhere) so the web caller
+	 * doesn't need to know about engine-internal types. The render loop
+	 * then picks up the {@code beginGameInformation} field on the next
+	 * frame and drives the actual map load — same code path as desktop
+	 * multiplayer, the engine doesn't care that the wire was WebRTC.
+	 *
+	 * <p>{@code hostInetAddress} is reinterpreted by the web
+	 * {@code GameClientStarter} as the host's netlib peer id (UTF-8 bytes);
+	 * on desktop it'd be IP bytes — never call this from desktop.
+	 */
+	public void startMultiplayerGameDirect(
+			final String mapPath,
+			final long sessionToken,
+			final byte[] hostInetAddress,
+			final int hostUdpPort,
+			final int localPlayerSlot,
+			final IntIntMap serverSlotToMapSlot,
+			final IntIntMap mapSlotToServerSlot) {
+		Gdx.app.postRunnable(new Runnable() {
+			@Override
+			public void run() {
+				// Mirror the visibility resets the BattleNet handler does so
+				// the engine ends up in a clean state regardless of which UI
+				// path the user took to get here. Most of these are no-ops on
+				// web (the campaign / BattleNet UIs were never made visible),
+				// but the setVisible(false) calls are cheap and defensive.
+				MenuUI.this.campaignMenu.setVisible(false);
+				MenuUI.this.campaignBackButton.setVisible(false);
+				MenuUI.this.missionSelectFrame.setVisible(false);
+				MenuUI.this.campaignSelectFrame.setVisible(false);
+				MenuUI.this.campaignWarcraftIIILogo.setVisible(false);
+				MenuUI.this.campaignRootMenuUI.setVisible(false);
+				MenuUI.this.currentMissionSelectMenuUI.setVisible(false);
+				MenuUI.this.skirmish.setVisible(false);
+
+				try {
+					loadAndCacheMapConfigs(mapPath);
+				}
+				catch (final java.io.IOException e) {
+					System.err.println("startMultiplayerGameDirect: loadAndCacheMapConfigs failed for " + mapPath
+							+ ": " + e.getMessage());
+					return;
+				}
+
+				MenuUI.this.beginGameInformation = new BeginGameInformation();
+				MenuUI.this.beginGameInformation.gameMapLookup =
+						new com.etheller.warsmash.viewer5.handlers.w3x.ui.mapsetup.CurrentNetGameMapLookupPath(mapPath);
+				MenuUI.this.beginGameInformation.sessionToken = sessionToken;
+				MenuUI.this.beginGameInformation.hostInetAddress = hostInetAddress;
+				MenuUI.this.beginGameInformation.hostUdpPort = hostUdpPort & 0xFFFF;
+				MenuUI.this.beginGameInformation.serverSlotToMapSlot = serverSlotToMapSlot;
+				MenuUI.this.beginGameInformation.mapSlotToServerSlot = mapSlotToServerSlot;
+				MenuUI.this.beginGameInformation.localPlayerIndex = serverSlotToMapSlot.get(localPlayerSlot, -1);
+				MenuUI.this.menuState = MenuState.GOING_TO_MAP;
+			}
+		});
+	}
 }

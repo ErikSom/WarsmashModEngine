@@ -76,6 +76,43 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 			status("map screen factory ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
 		}
 
+		// Multiplayer substrate: initialise the Poki Netlib singleton and
+		// install the joiner-side GameClientStarter that MenuUI reaches via
+		// NetworkPlatform.startNetworkGameClient. The host-side server
+		// transport is constructed lazily when the user clicks "Host" — it
+		// doesn't need to be wired here.
+		//
+		// The script tag for poki-bridge.js in index.html is synchronous, so
+		// by the time create() runs the bridge globals (pokiBridgeInit etc.)
+		// are guaranteed present. ensureInitialized returns false if the
+		// netlib library failed to load (e.g. the gradle :html:buildWebSrc
+		// task didn't run), in which case we degrade to single-player and
+		// log a status line for diagnosis.
+		try {
+			final boolean ok = com.etheller.warsmash.html.network.WebRtcOrderedTransport.get()
+					.ensureInitialized(com.etheller.warsmash.html.network.WarsmashWebGameId.UUID);
+			if (ok) {
+				com.etheller.warsmash.networking.NetworkPlatform.installGameClientStarter(
+						new com.etheller.warsmash.html.network.WebGameClientStarter());
+				// Force-init the coordinator so its global function exports
+				// (warsmashHostLobby / warsmashJoinLobby / warsmashStartGame
+				// / etc.) are bound for the index.html DOM overlay to call.
+				// Hand it a reference to ourselves so it can reach MenuUI
+				// when the user clicks Start (current screen → MenuUI →
+				// startMultiplayerGameDirect).
+				final com.etheller.warsmash.html.network.WebMultiplayerCoordinator coord =
+						com.etheller.warsmash.html.network.WebMultiplayerCoordinator.get();
+				coord.attachGame(this);
+				status("multiplayer: Poki Netlib bridge initialised; client starter + coordinator installed");
+			}
+			else {
+				status("multiplayer: bridge init returned false — single-player only");
+			}
+		}
+		catch (final Throwable t) {
+			status("multiplayer ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+		}
+
 		// Decode-on-demand: BlpTexture.load uses this to upload a sync-decoded
 		// thumbnail mip immediately, then the upgrader async-decodes mip 0
 		// and re-uploads the texture once ready. Pairs with skipping JPEG BLP

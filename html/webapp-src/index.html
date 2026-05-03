@@ -236,6 +236,49 @@
 
 	<div id="version" title="View changelog"></div>
 
+	<!-- Multiplayer lobby overlay: appears in the bottom-right once the
+	     engine has booted and WebMultiplayerCoordinator has bound the
+	     warsmash* lobby functions to the global. Pure DOM — does not
+	     interact with the libGDX canvas. Hidden by default; the engine
+	     boot path reveals it once the coordinator is live. -->
+	<div id="mp-overlay" style="position: fixed; right: 12px; bottom: 12px; z-index: 100;
+	     background: rgba(20,30,45,0.92); border: 1px solid #4a5366; border-radius: 6px;
+	     padding: 10px 12px; font-family: system-ui, sans-serif; font-size: 12px;
+	     color: #d8dde6; max-width: 320px;">
+		<div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+			<strong style="color:#ffd66b;">Multiplayer</strong>
+			<span id="mp-self" style="color:#888; font-family: ui-monospace, Menlo, monospace; font-size: 10px;">—</span>
+			<button id="mp-toggle" style="margin-left:auto; background:transparent; border:1px solid #4a5366;
+			     color:#aaa; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:11px;">hide</button>
+		</div>
+		<div id="mp-body">
+			<div style="margin-bottom:6px;">
+				<button id="mp-host" style="background:#2a4a7a; color:white; border:none;
+				     padding:5px 10px; border-radius:3px; cursor:pointer; font-size:11px;">Host new lobby</button>
+				or
+				<input type="text" id="mp-join-code" placeholder="lobby code" maxlength="20"
+				     style="background:#11141a; color:#d8dde6; border:1px solid #4a5366;
+				     padding:4px 6px; border-radius:3px; font-size:11px; width:8em;">
+				<button id="mp-join" style="background:#2a4a7a; color:white; border:none;
+				     padding:5px 10px; border-radius:3px; cursor:pointer; font-size:11px;">Join</button>
+				<button id="mp-leave" disabled style="background:#5a3a3a; color:white; border:none;
+				     padding:5px 10px; border-radius:3px; cursor:pointer; font-size:11px; opacity:0.5;">Leave</button>
+			</div>
+			<div style="margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+				<input type="text" id="mp-map-path" value="Maps/FrozenThrone/(2)EchoIsles.w3x"
+				     style="background:#11141a; color:#d8dde6; border:1px solid #4a5366;
+				     padding:4px 6px; border-radius:3px; font-size:11px; flex:1;">
+				<button id="mp-start" disabled style="background:#3a6a3a; color:white; border:none;
+				     padding:5px 10px; border-radius:3px; cursor:pointer; font-size:11px; opacity:0.5;">Start Game</button>
+			</div>
+			<div id="mp-state" style="color:#aac; font-family: ui-monospace, Menlo, monospace; font-size: 11px;">not in lobby</div>
+			<div id="mp-peers" style="color:#cdd; font-family: ui-monospace, Menlo, monospace; font-size: 11px; margin-top:4px;"></div>
+			<div id="mp-status" style="color:#ffd66b; font-family: ui-monospace, Menlo, monospace; font-size: 11px; margin-top:4px;"></div>
+			<div id="mp-events" style="color:#888; font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+			     margin-top:6px; max-height: 8em; overflow-y: auto;"></div>
+		</div>
+	</div>
+
 	<div id="changelog-modal">
 		<div class="changelog-panel">
 			<div class="changelog-header">
@@ -245,6 +288,242 @@
 			<div id="changelog-body" class="changelog-body">Loading…</div>
 		</div>
 	</div>
+
+	<!-- Poki Netlib bridge: parcel-bundled (web-src/poki-bridge.ts +
+	     @poki/netlib). Loads before the boot script so the engine's
+	     `pokiBridge*` globals are available the moment any Java code
+	     reaches PokiNetlibBridge.init(). Pure side-effect — assigns
+	     pokiBridgeInit / pokiBridgeCreateLobby / etc. to the global. -->
+	<script src="poki-bridge.js"></script>
+
+	<!-- Multiplayer DOM overlay wiring. The lobby UI runs ENTIRELY on the
+	     main thread using poki-bridge.js's globals directly, because the
+	     engine itself runs in a Web Worker (engine-worker.js) which has its
+	     own `self` global — anything the engine binds via @JSBody isn't
+	     visible from this DOM context. Game-start (Start Game button) sends
+	     a postMessage to the worker once we're ready to actually launch
+	     into the map.
+	     The pre-game lobby (host/join/peer events) is therefore independent
+	     of engine boot — works immediately when the page loads. -->
+	<script>
+	(function () {
+		// Stable UUID — must match WarsmashWebGameId.UUID on the Java side
+		// so the JS-driven lobby and the engine's understanding of "which
+		// game id is this" don't drift.
+		var WARSMASH_GAME_ID = 'a664aaff-9291-4c9c-9f26-47b56eb7914a';
+		var overlay = document.getElementById('mp-overlay');
+		var toggleBtn = document.getElementById('mp-toggle');
+		var hostBtn = document.getElementById('mp-host');
+		var joinBtn = document.getElementById('mp-join');
+		var leaveBtn = document.getElementById('mp-leave');
+		var joinCodeEl = document.getElementById('mp-join-code');
+		var stateEl = document.getElementById('mp-state');
+		var peersEl = document.getElementById('mp-peers');
+		var eventsEl = document.getElementById('mp-events');
+		var bodyEl = document.getElementById('mp-body');
+		var selfEl = document.getElementById('mp-self');
+		var startBtn = document.getElementById('mp-start');
+		var mapPathEl = document.getElementById('mp-map-path');
+		var statusEl = document.getElementById('mp-status');
+		var peers = new Set();
+		var weAreHost = false;
+
+		function logEvent(text, color) {
+			var d = document.createElement('div');
+			d.textContent = '[' + new Date().toISOString().slice(11, 19) + '] ' + text;
+			if (color) d.style.color = color;
+			eventsEl.appendChild(d);
+			eventsEl.scrollTop = eventsEl.scrollHeight;
+		}
+
+		function refreshPeers() {
+			if (peers.size === 0) { peersEl.textContent = 'no peers'; }
+			else {
+				peersEl.innerHTML = 'peers: ';
+				peers.forEach(function (p) {
+					var s = document.createElement('span');
+					s.textContent = p;
+					s.style.cssText = 'background:#2a4a7a; padding:1px 5px; margin-right:4px; border-radius:3px;';
+					peersEl.appendChild(s);
+				});
+			}
+			refreshStartButton();
+		}
+
+		function refreshStartButton() {
+			// Start enabled when we're host AND at least one peer is connected.
+			var canStart = weAreHost && peers.size > 0;
+			startBtn.disabled = !canStart;
+			startBtn.style.opacity = canStart ? '1' : '0.5';
+		}
+
+		toggleBtn.onclick = function () {
+			var hidden = bodyEl.style.display === 'none';
+			bodyEl.style.display = hidden ? '' : 'none';
+			toggleBtn.textContent = hidden ? 'hide' : 'show';
+		};
+
+		// Initial state: buttons disabled, awaiting the Java coordinator.
+		// The coordinator only binds its globals during WebWarsmashGame.create(),
+		// which runs after the user has uploaded their W3 folder and clicked
+		// "Play game". Show "waiting for engine…" until that happens so the
+		// overlay isn't a dead UI element that confuses people pre-boot.
+		hostBtn.disabled = true; hostBtn.style.opacity = '0.5';
+		joinBtn.disabled = true; joinBtn.style.opacity = '0.5';
+		statusEl.textContent = 'waiting for engine boot…';
+
+		hostBtn.onclick = function () {
+			if (typeof self.pokiBridgeCreateLobby !== 'function') {
+				logEvent('netlib bridge not loaded', '#f88'); return;
+			}
+			hostBtn.disabled = true; joinBtn.disabled = true;
+			self.pokiBridgeCreateLobby(function (code) {
+				weAreHost = true;
+				refreshStartButton();
+				logEvent('hosting ' + code, '#8c8');
+			}, function (reason) {
+				logEvent('host failed: ' + reason, '#f88');
+				hostBtn.disabled = false; joinBtn.disabled = false;
+			});
+		};
+
+		startBtn.onclick = function () {
+			var mapPath = mapPathEl.value.trim();
+			if (!mapPath) { logEvent('enter a map path first', '#f88'); return; }
+			startBtn.disabled = true; startBtn.style.opacity = '0.5';
+			logEvent('starting game with map ' + mapPath, '#8c8');
+			// TODO: postMessage to engine-worker to actually start. The
+			// pre-engine-boot lobby works without it, but the game-start
+			// path needs the worker-side WarsmashServer/Client construction.
+			logEvent('Start Game wiring TBD — see WebMultiplayerCoordinator postMessage bridge', '#ffd66b');
+		};
+
+		joinBtn.onclick = function () {
+			var code = joinCodeEl.value.trim();
+			if (!code) { logEvent('enter a code', '#f88'); return; }
+			if (typeof self.pokiBridgeJoinLobby !== 'function') {
+				logEvent('netlib bridge not loaded', '#f88'); return;
+			}
+			hostBtn.disabled = true; joinBtn.disabled = true;
+			self.pokiBridgeJoinLobby(code, function (joinedCode) {
+				logEvent('joined ' + joinedCode, '#8c8');
+			}, function (reason) {
+				logEvent('join failed: ' + reason, '#f88');
+				hostBtn.disabled = false; joinBtn.disabled = false;
+			});
+		};
+
+		leaveBtn.onclick = function () {
+			if (typeof self.pokiBridgeLeaveLobby !== 'function') return;
+			self.pokiBridgeLeaveLobby();
+		};
+
+		// Initialise the netlib bridge directly on the main thread once
+		// poki-bridge.js has loaded. The script tag for it sits above this
+		// one, so by the time this IIFE runs it's already evaluated and
+		// pokiBridgeInit is on `self` (== window here).
+		function initBridge () {
+			if (typeof self.pokiBridgeInit !== 'function') {
+				logEvent('FATAL: pokiBridgeInit not found — poki-bridge.js failed to load', '#f88');
+				statusEl.textContent = 'bridge missing';
+				return;
+			}
+			var ok = self.pokiBridgeInit(WARSMASH_GAME_ID, {
+				ready: function (selfId) {
+					selfEl.textContent = selfId;
+					statusEl.textContent = 'ready';
+					hostBtn.disabled = false; hostBtn.style.opacity = '1';
+					joinBtn.disabled = false; joinBtn.style.opacity = '1';
+					logEvent('netlib ready, self id: ' + selfId, '#8c8');
+				},
+				lobby: function (code) {
+					// Render as a click-to-copy chip rather than plain text.
+					// Easier than reaching for the keyboard while you're
+					// switching to the joiner tab.
+					stateEl.innerHTML = '';
+					var prefix = document.createTextNode('lobby: ');
+					var chip = document.createElement('span');
+					chip.textContent = code;
+					chip.title = 'Click to copy';
+					chip.style.cssText = 'cursor:pointer; padding:1px 6px; background:#2a4a7a; '
+						+ 'color:#ffd66b; border-radius:3px; font-weight:bold; '
+						+ 'letter-spacing:0.05em; user-select:all;';
+					chip.onclick = function () {
+						var done = function () {
+							var prev = chip.textContent;
+							chip.textContent = 'copied!';
+							chip.style.background = '#3a6a3a';
+							setTimeout(function () {
+								chip.textContent = prev;
+								chip.style.background = '#2a4a7a';
+							}, 900);
+						};
+						// navigator.clipboard requires a secure context (https
+						// or localhost). Fall back to a hidden-textarea copy
+						// for the rare case where it's not available.
+						if (navigator.clipboard && navigator.clipboard.writeText) {
+							navigator.clipboard.writeText(code).then(done, function (err) {
+								logEvent('clipboard write failed: ' + err, '#f88');
+							});
+						} else {
+							var ta = document.createElement('textarea');
+							ta.value = code;
+							ta.style.cssText = 'position:fixed; opacity:0;';
+							document.body.appendChild(ta);
+							ta.select();
+							try { document.execCommand('copy'); done(); }
+							catch (e) { logEvent('copy failed: ' + e, '#f88'); }
+							finally { document.body.removeChild(ta); }
+						}
+					};
+					stateEl.appendChild(prefix);
+					stateEl.appendChild(chip);
+					leaveBtn.disabled = false; leaveBtn.style.opacity = '1';
+				},
+				left: function () {
+					stateEl.textContent = 'not in lobby';
+					peers.clear(); refreshPeers();
+					weAreHost = false; refreshStartButton();
+					hostBtn.disabled = false; joinBtn.disabled = false;
+					leaveBtn.disabled = true; leaveBtn.style.opacity = '0.5';
+				},
+				peerConnected: function (peerId) {
+					peers.add(peerId); refreshPeers();
+					logEvent('peer connected: ' + peerId, '#8c8');
+				},
+				peerDisconnected: function (peerId, reason) {
+					peers.delete(peerId); refreshPeers();
+					logEvent('peer disconnected: ' + peerId + ' (' + reason + ')', '#f88');
+				},
+				leader: function (id) {
+					logEvent('leader is now ' + id, '#aac');
+				},
+				message: function (peerId, channel, bytesU8, isString, stringValue) {
+					// Pre-game lobby control messages and any chatter ride
+					// the reliable channel; engine traffic lands on
+					// unreliable. We don't dispatch engine traffic here yet
+					// (TODO: postMessage to the engine-worker).
+					if (isString) {
+						logEvent('msg ' + peerId + ' [' + channel + '] "' + stringValue + '"');
+					} else {
+						logEvent('msg ' + peerId + ' [' + channel + '] bytes(' + bytesU8.byteLength + ')');
+					}
+				},
+				error: function (kind, message) {
+					logEvent(kind + ': ' + message, '#f88');
+				}
+			});
+			if (!ok) {
+				logEvent('pokiBridgeInit returned false — netlib library load issue?', '#f88');
+				statusEl.textContent = 'init failed';
+				return;
+			}
+			statusEl.textContent = 'connecting to signaling…';
+			logEvent('bridge initialised, awaiting netlib ready event');
+		}
+		initBridge();
+	})();
+	</script>
 
 	<script>
 		const READY_KEY = 'w3AssetsReady';

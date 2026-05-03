@@ -1,7 +1,6 @@
 package com.etheller.warsmash.networking.udp;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 
 import net.warsmash.networking.udp.UdpServer;
@@ -19,7 +18,7 @@ public class UdpServerTestMain {
 				ByteBuffer sendBuffer = ByteBuffer.allocate(1024);
 
 				@Override
-				public void parse(final SocketAddress sourceAddress, final ByteBuffer buffer) {
+				public void parse(final Object sourceAddress, final ByteBuffer buffer) {
 					System.out.println("Got packet from: " + sourceAddress);
 					while (buffer.hasRemaining()) {
 						System.out.println("Received: " + buffer.get());
@@ -28,7 +27,7 @@ public class UdpServerTestMain {
 						this.sendBuffer.clear();
 						this.sendBuffer.putInt(this.n++);
 						this.sendBuffer.flip();
-						warsmashGameServer.send(sourceAddress, this.sendBuffer);
+						warsmashGameServer.send((java.net.SocketAddress) sourceAddress, this.sendBuffer);
 					}
 					catch (final IOException e) {
 						e.printStackTrace();

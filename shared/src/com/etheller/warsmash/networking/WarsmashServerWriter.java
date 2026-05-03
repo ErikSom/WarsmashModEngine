@@ -1,19 +1,21 @@
 package com.etheller.warsmash.networking;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Set;
 
-import net.warsmash.networking.udp.OrderedUdpServer;
-
 public class WarsmashServerWriter implements ServerToClientListener {
-	private final OrderedUdpServer server;
+	// Type widened from OrderedUdpServer to MessageSender so non-UDP
+	// transports can plug in (the web build's WebRtcOrderedServer uses a
+	// custom marker class to identify peers by netlib peer id rather than
+	// IP+port). Concrete OrderedUdpServer still satisfies this on desktop.
+	// Address type is Object — see UdpServerListener for rationale.
+	private final MessageSender server;
 	private final ByteBuffer sendBuffer = ByteBuffer.allocate(1024).order(ByteOrder.BIG_ENDIAN);
-	private final Set<SocketAddress> allKnownAddressesToSend;
+	private final Set<Object> allKnownAddressesToSend;
 
-	public WarsmashServerWriter(final OrderedUdpServer server, final Set<SocketAddress> allKnownAddressesToSend) {
+	public WarsmashServerWriter(final MessageSender server, final Set<Object> allKnownAddressesToSend) {
 		this.server = server;
 		this.allKnownAddressesToSend = allKnownAddressesToSend;
 	}
@@ -140,7 +142,7 @@ public class WarsmashServerWriter implements ServerToClientListener {
 		this.sendBuffer.putInt(ServerToClientProtocol.START_GAME);
 	}
 
-	public void send(final SocketAddress sourceAddress) {
+	public void send(final Object sourceAddress) {
 		this.sendBuffer.flip();
 		try {
 			this.server.send(sourceAddress, this.sendBuffer);
@@ -153,7 +155,7 @@ public class WarsmashServerWriter implements ServerToClientListener {
 	public void send() {
 		this.sendBuffer.flip();
 		try {
-			for (final SocketAddress address : this.allKnownAddressesToSend) {
+			for (final Object address : this.allKnownAddressesToSend) {
 				final int pos = this.sendBuffer.position();
 				final int limit = this.sendBuffer.limit();
 				this.server.send(address, this.sendBuffer);
