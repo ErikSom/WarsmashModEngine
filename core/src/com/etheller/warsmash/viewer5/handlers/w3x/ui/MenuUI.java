@@ -2820,6 +2820,43 @@ public class MenuUI {
 					return;
 				}
 
+				// Activate player slots: peers in the lobby are humans on
+				// the slots they were assigned; remaining USER slots default
+				// to AI (mirrors single-player skirmish around line 1185 in
+				// this file). Without this, no slot is marked PLAYING and
+				// the engine never spawns starting units even though the
+				// turn-tick loop is running.
+				final java.util.Set<Integer> humanSlots = new java.util.HashSet<>();
+				for (final com.badlogic.gdx.utils.IntIntMap.Entry e : serverSlotToMapSlot) {
+					if (e.value >= 0) humanSlots.add(e.value);
+				}
+				if (MenuUI.this.currentMapConfig != null) {
+					boolean foundFirstComp = false;
+					for (int i = 0; i < com.etheller.warsmash.util.WarsmashConstants.MAX_PLAYERS; i++) {
+						final com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.CBasePlayer player =
+								MenuUI.this.currentMapConfig.getPlayer(i);
+						final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl ctrl =
+								player.getController();
+						if (humanSlots.contains(i)) {
+							player.setController(com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl.USER);
+							player.setSlotState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState.PLAYING);
+						}
+						else if (ctrl == com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl.USER) {
+							// Unassigned USER slot — fill with AI so the
+							// melee victory check doesn't fire at t=0.
+							player.setController(com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl.COMPUTER);
+							player.setSlotState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState.PLAYING);
+							player.setAIDifficulty(com.etheller.warsmash.viewer5.handlers.w3x.simulation.ai.AIDifficulty.NORMAL);
+						}
+						else if (ctrl == com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl.COMPUTER) {
+							if (!foundFirstComp) {
+								player.setSlotState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState.PLAYING);
+								foundFirstComp = true;
+							}
+						}
+					}
+				}
+
 				MenuUI.this.beginGameInformation = new BeginGameInformation();
 				MenuUI.this.beginGameInformation.gameMapLookup =
 						new com.etheller.warsmash.viewer5.handlers.w3x.ui.mapsetup.CurrentNetGameMapLookupPath(mapPath);

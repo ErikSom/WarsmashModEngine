@@ -327,6 +327,88 @@
 		var statusEl = document.getElementById('mp-status');
 		var peers = new Set();
 		var weAreHost = false;
+		// Cached state for the start handshake. Filled by the JSON control
+		// messages we receive on the reliable channel; consumed when we
+		// postMessage 'mp-start-as-{host,joiner}' to our own engine-worker.
+		var mySessionToken = null;        // assigned by the host (or self-allocated when WE are host)
+		var mySlot = null;                // 0 for host, 1..N for joiners
+		var sessionTokenToSlotMap = {};   // global slot map (full lobby)
+		var hostPeerId = null;            // netlib peer id of the host
+		// engineWorker reference — handed to us by bootEngineWorker once
+		// the user has clicked "Play game" and the worker has spawned. Stays
+		// null in the lobby phase. Engine traffic and start commands route
+		// through it; lobby control / netlib events run main-thread-only.
+		var engineWorker = null;
+		// Replay current netlib state to the worker. Idempotent — safe to
+		// call repeatedly. Used both at __mpAttachWorker time (best-effort,
+		// worker handlers might not exist yet) and on the worker's
+		// mp-handler-ready handshake (definitely-installed delivery).
+		function replayStateToWorker() {
+			if (!engineWorker) return;
+			var selfId = (typeof self.pokiBridgeSelfId === 'function') ? self.pokiBridgeSelfId() : '';
+			engineWorker.postMessage({ kind: 'mp-state',
+				selfId: selfId,
+				currentLobby: (typeof self.pokiBridgeCurrentLobby === 'function') ? self.pokiBridgeCurrentLobby() : '',
+				currentLeader: (typeof self.pokiBridgeCurrentLeader === 'function') ? self.pokiBridgeCurrentLeader() : '',
+				peerIds: (typeof self.pokiBridgePeerIds === 'function') ? self.pokiBridgePeerIds() : [] });
+			if (selfId) {
+				engineWorker.postMessage({ kind: 'mp-ready', selfId: selfId });
+			}
+			var lobbyCode = (typeof self.pokiBridgeCurrentLobby === 'function') ? self.pokiBridgeCurrentLobby() : '';
+			if (lobbyCode) {
+				engineWorker.postMessage({ kind: 'mp-lobby', code: lobbyCode });
+			}
+			peers.forEach(function (peerId) {
+				engineWorker.postMessage({ kind: 'mp-peer-connected', peerId: peerId });
+			});
+		}
+		window.__mpAttachWorker = function (w) {
+			engineWorker = w;
+			// Worker comes up AFTER netlib has been doing its thing, so
+			// the worker missed any netlib events that fired pre-boot.
+			// We send an initial replay here, but the worker's
+			// addEventListener might not be installed yet (TeaVM main()
+			// runs async after worker spawn). The bullet-proof path is
+			// the worker's mp-handler-ready handshake — it explicitly
+			// signals "I'm listening now"; we replay then. See the message
+			// listener below + replayStateToWorker.
+			replayStateToWorker();
+			// Outgoing-bytes path: worker postMessages mp-rtc-send-to /
+			// mp-rtc-broadcast / mp-close — forward to netlib. Also handles
+			// the worker's mp-handler-ready handshake (re-replays current
+			// state so the worker hydrates its caches no matter how late
+			// the engine boots vs the netlib ready event).
+			engineWorker.addEventListener('message', function (e) {
+				var d = e && e.data;
+				if (!d || typeof d.kind !== 'string') return;
+				switch (d.kind) {
+					case 'mp-rtc-send-to':
+						if (typeof self.pokiBridgeSendBytesTo === 'function') {
+							self.pokiBridgeSendBytesTo(d.peerId, d.channel, d.bytes);
+						}
+						break;
+					case 'mp-rtc-broadcast':
+						if (typeof self.pokiBridgeBroadcastBytes === 'function') {
+							self.pokiBridgeBroadcastBytes(d.channel, d.bytes);
+						}
+						break;
+					case 'mp-close':
+						if (typeof self.pokiBridgeClose === 'function') {
+							self.pokiBridgeClose();
+						}
+						break;
+					case 'mp-handler-ready':
+						replayStateToWorker();
+						break;
+				}
+			});
+			logEvent('engine-worker attached');
+		};
+
+		// Tiny helper: fire-and-forget if the worker is alive.
+		function postToWorker(msg) {
+			if (engineWorker) engineWorker.postMessage(msg);
+		}
 
 		function logEvent(text, color) {
 			var d = document.createElement('div');
@@ -363,14 +445,13 @@
 			toggleBtn.textContent = hidden ? 'hide' : 'show';
 		};
 
-		// Initial state: buttons disabled, awaiting the Java coordinator.
-		// The coordinator only binds its globals during WebWarsmashGame.create(),
-		// which runs after the user has uploaded their W3 folder and clicked
-		// "Play game". Show "waiting for engine…" until that happens so the
-		// overlay isn't a dead UI element that confuses people pre-boot.
+		// Initial state: buttons disabled until the netlib bridge connects.
+		// Hosting/joining works WITHOUT the engine being booted (the lobby
+		// runs main-thread-only); the Start Game button needs the engine
+		// alive (it postMessages the worker).
 		hostBtn.disabled = true; hostBtn.style.opacity = '0.5';
 		joinBtn.disabled = true; joinBtn.style.opacity = '0.5';
-		statusEl.textContent = 'waiting for engine boot…';
+		statusEl.textContent = 'connecting to signaling…';
 
 		hostBtn.onclick = function () {
 			if (typeof self.pokiBridgeCreateLobby !== 'function') {
@@ -390,13 +471,113 @@
 		startBtn.onclick = function () {
 			var mapPath = mapPathEl.value.trim();
 			if (!mapPath) { logEvent('enter a map path first', '#f88'); return; }
+			if (!engineWorker) { logEvent('engine not booted — click "Play game" first', '#f88'); return; }
+			if (!weAreHost)    { logEvent('only the host can start', '#f88'); return; }
+
+			var selfId = (typeof self.pokiBridgeSelfId === 'function') ? self.pokiBridgeSelfId() : '';
+			if (!selfId) { logEvent('no self id from netlib yet', '#f88'); return; }
+
+			// Allocate slots: host=0, joiners=1..N. Generate session tokens
+			// (kept as JS-safe ints under 2^53; serialised as decimal strings
+			// when crossing the postMessage boundary so the Java long round-
+			// trips precisely).
+			var peerArr = Array.from(peers);
+			var hostToken = newSessionToken();
+			sessionTokenToSlotMap = {};
+			sessionTokenToSlotMap[String(hostToken)] = 0;
+
+			var perPeer = peerArr.map(function (peerId, i) {
+				var slot = i + 1;
+				var token = newSessionToken();
+				sessionTokenToSlotMap[String(token)] = slot;
+				return { peerId: peerId, slot: slot, sessionToken: token };
+			});
+
+			// Send each joiner their personalised START_AS_JOINER over the
+			// reliable channel. JSON keeps the wire format simple — control
+			// messages are infrequent so the parse cost doesn't matter.
+			perPeer.forEach(function (p) {
+				var msg = {
+					type: 'start-as-joiner',
+					mapPath: mapPath,
+					hostPeerId: selfId,
+					mySessionToken: String(p.sessionToken),
+					mySlot: String(p.slot),
+					sessionTokenToSlot: sessionTokenToSlotMap
+				};
+				self.pokiBridgeSendBytesTo(p.peerId, 'reliable', encodeUtf8(JSON.stringify(msg)));
+			});
+
+			// Local: tell our own engine-worker to start as host. Same shape
+			// as what we just sent to joiners, but with our own token + slot.
+			var hostMsg = startMessageForWorker(true, mapPath, selfId, String(hostToken), '0', sessionTokenToSlotMap);
+			postToWorker(hostMsg);
+
 			startBtn.disabled = true; startBtn.style.opacity = '0.5';
-			logEvent('starting game with map ' + mapPath, '#8c8');
-			// TODO: postMessage to engine-worker to actually start. The
-			// pre-engine-boot lobby works without it, but the game-start
-			// path needs the worker-side WarsmashServer/Client construction.
-			logEvent('Start Game wiring TBD — see WebMultiplayerCoordinator postMessage bridge', '#ffd66b');
+			logEvent('starting game (host) with map ' + mapPath + ', ' + perPeer.length + ' peer(s)', '#8c8');
 		};
+
+		function newSessionToken() {
+			// Stay under Number.MAX_SAFE_INTEGER (2^53-1) so JS can
+			// represent the value losslessly. We serialise as a string at
+			// every postMessage hop, so the Java long picks it up exactly.
+			return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+		}
+
+		function startMessageForWorker(isHost, mapPath, hostPeerId, mySessionToken, mySlot, tokenToSlot) {
+			var sessionTokens = [];
+			var slots = [];
+			Object.keys(tokenToSlot).forEach(function (token) {
+				sessionTokens.push(token);
+				slots.push(String(tokenToSlot[token]));
+			});
+			return {
+				kind: isHost ? 'mp-start-as-host' : 'mp-start-as-joiner',
+				mapPath: mapPath,
+				hostPeerId: hostPeerId,
+				mySessionToken: mySessionToken,
+				mySlot: mySlot,
+				sessionTokens: sessionTokens,
+				slots: slots
+			};
+		}
+
+		function encodeUtf8(str) {
+			return new TextEncoder().encode(str);
+		}
+
+		function decodeUtf8(buf) {
+			if (!buf) return '';
+			if (typeof buf === 'string') return buf;
+			return new TextDecoder().decode(buf);
+		}
+
+		function handleControlMessage(peerId, payload) {
+			var msg;
+			try { msg = JSON.parse(payload); }
+			catch (e) {
+				logEvent('control msg parse failed from ' + peerId + ': ' + e, '#f88');
+				return;
+			}
+			switch (msg.type) {
+				case 'start-as-joiner':
+					mySessionToken = msg.mySessionToken;
+					mySlot = msg.mySlot;
+					sessionTokenToSlotMap = msg.sessionTokenToSlot || {};
+					hostPeerId = msg.hostPeerId || peerId;
+					if (!engineWorker) {
+						logEvent('start-as-joiner received but engine not booted yet', '#f88');
+						return;
+					}
+					var jMsg = startMessageForWorker(false, msg.mapPath, hostPeerId, mySessionToken, mySlot, sessionTokenToSlotMap);
+					postToWorker(jMsg);
+					logEvent('joining game (slot ' + mySlot + ') with map ' + msg.mapPath, '#8c8');
+					break;
+				default:
+					logEvent('unknown control msg type ' + msg.type + ' from ' + peerId, '#f88');
+					break;
+			}
+		}
 
 		joinBtn.onclick = function () {
 			var code = joinCodeEl.value.trim();
@@ -435,6 +616,7 @@
 					hostBtn.disabled = false; hostBtn.style.opacity = '1';
 					joinBtn.disabled = false; joinBtn.style.opacity = '1';
 					logEvent('netlib ready, self id: ' + selfId, '#8c8');
+					postToWorker({ kind: 'mp-ready', selfId: selfId });
 				},
 				lobby: function (code) {
 					// Render as a click-to-copy chip rather than plain text.
@@ -479,6 +661,7 @@
 					stateEl.appendChild(prefix);
 					stateEl.appendChild(chip);
 					leaveBtn.disabled = false; leaveBtn.style.opacity = '1';
+					postToWorker({ kind: 'mp-lobby', code: code });
 				},
 				left: function () {
 					stateEl.textContent = 'not in lobby';
@@ -486,31 +669,41 @@
 					weAreHost = false; refreshStartButton();
 					hostBtn.disabled = false; joinBtn.disabled = false;
 					leaveBtn.disabled = true; leaveBtn.style.opacity = '0.5';
+					postToWorker({ kind: 'mp-left' });
 				},
 				peerConnected: function (peerId) {
 					peers.add(peerId); refreshPeers();
 					logEvent('peer connected: ' + peerId, '#8c8');
+					postToWorker({ kind: 'mp-peer-connected', peerId: peerId });
 				},
 				peerDisconnected: function (peerId, reason) {
 					peers.delete(peerId); refreshPeers();
 					logEvent('peer disconnected: ' + peerId + ' (' + reason + ')', '#f88');
+					postToWorker({ kind: 'mp-peer-disconnected', peerId: peerId, reason: reason || '' });
 				},
 				leader: function (id) {
 					logEvent('leader is now ' + id, '#aac');
+					postToWorker({ kind: 'mp-leader', leaderId: id });
 				},
 				message: function (peerId, channel, bytesU8, isString, stringValue) {
-					// Pre-game lobby control messages and any chatter ride
-					// the reliable channel; engine traffic lands on
-					// unreliable. We don't dispatch engine traffic here yet
-					// (TODO: postMessage to the engine-worker).
-					if (isString) {
-						logEvent('msg ' + peerId + ' [' + channel + '] "' + stringValue + '"');
-					} else {
-						logEvent('msg ' + peerId + ' [' + channel + '] bytes(' + bytesU8.byteLength + ')');
+					if (channel === 'reliable') {
+						// Control protocol — JSON over UTF-8 string. Handled
+						// entirely on the main thread so the worker only
+						// hears about ALREADY-orchestrated start commands.
+						handleControlMessage(peerId, isString ? stringValue : decodeUtf8(bytesU8));
+						return;
 					}
+					// Unreliable channel: engine lockstep traffic. Forward
+					// to the engine-worker if alive; drop otherwise (no
+					// engine to feed). Pre-game peers shouldn't be sending
+					// unreliable traffic anyway.
+					postToWorker({ kind: 'mp-rtc-msg',
+						peerId: peerId, channel: channel,
+						bytes: bytesU8, isString: isString, stringValue: stringValue });
 				},
 				error: function (kind, message) {
 					logEvent(kind + ': ' + message, '#f88');
+					postToWorker({ kind: 'mp-error', errKind: kind, message: message || '' });
 				}
 			});
 			if (!ok) {
@@ -937,6 +1130,12 @@
 
 		function bootEngineWorker(canvas, offscreen, cssW, cssH) {
 			const worker = new Worker(versionedAsset('engine-worker-boot.js'));
+			// Hand the worker to the multiplayer overlay so it can postMessage
+			// engine traffic + start commands. Idempotent — overlay tolerates
+			// repeated calls (the latter wins).
+			if (typeof window.__mpAttachWorker === 'function') {
+				window.__mpAttachWorker(worker);
+			}
 			worker.addEventListener('message', (e) => {
 				const m = e.data;
 				if (m && typeof m === 'object' && typeof m.kind === 'string' && m.kind.indexOf('audio.') === 0) {
