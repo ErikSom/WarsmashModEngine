@@ -825,6 +825,19 @@ public class MenuUI {
 		setMainMenuVisible(false);
 		this.rootFrame.getFrameByName("RealmSelect", 0).setVisible(false);
 
+		// Version label in the bottom-right of the main menu — mirrors
+		// the "v…" chip the web shell shows on its other pages, and
+		// matches the WC3 client's own version-in-corner convention.
+		// Pulls from WarsmashConstants.WARSMASH_VERSION which is kept
+		// in lockstep with html/web-src/src/lib/version.ts.
+		final com.etheller.warsmash.parsers.fdf.frames.StringFrame versionLabel =
+				this.rootFrame.createStringFrame("WarsmashVersionLabel", this.mainMenuFrame,
+						new Color(0.55f, 0.55f, 0.55f, 1.0f), TextJustify.RIGHT, TextJustify.BOTTOM, 0.008f);
+		this.rootFrame.setText(versionLabel,
+				"v" + com.etheller.warsmash.util.WarsmashConstants.WARSMASH_VERSION);
+		versionLabel.addSetPoint(new SetPoint(FramePoint.BOTTOMRIGHT, this.mainMenuFrame, FramePoint.BOTTOMRIGHT,
+				GameUI.convertX(this.uiViewport, -0.012f), GameUI.convertY(this.uiViewport, 0.008f)));
+
 		this.glueSpriteLayerTopRight = (SpriteFrame) this.rootFrame.createFrameByType("SPRITE",
 				"SmashGlueSpriteLayerTopRight", this.rootFrame, "", 0);
 		this.glueSpriteLayerTopRight.setSetAllPoints(true);
