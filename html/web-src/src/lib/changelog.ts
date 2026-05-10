@@ -59,8 +59,20 @@ export function renderChangelog(md: string): string {
     }
     else {
       closeList();
-      out.push('<p>' + inline(line) + '</p>');
+      // Coalesce consecutive non-blank, non-list, non-heading lines
+      // into a single <p> — the markdown convention is that a hard
+      // newline mid-sentence is just a soft wrap, not a paragraph
+      // break. CHANGELOG.md uses ~70-col hard-wrap so without this
+      // every line shows up as its own short paragraph.
+      let para = line;
       i++;
+      while (i < lines.length) {
+        const next = lines[i].replace(/\s+$/, '');
+        if (next === '' || next.startsWith('# ') || next.startsWith('## ') || next.startsWith('- ')) break;
+        para += ' ' + next;
+        i++;
+      }
+      out.push('<p>' + inline(para) + '</p>');
     }
   }
   closeList();

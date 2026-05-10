@@ -244,6 +244,11 @@ body.engine-page {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  /* Reset text-align to start so we don't inherit a centered
+     alignment from whichever parent the modal is rendered inside
+     (the landing footer's text-align: center was leaking into the
+     changelog body, centering every paragraph and bullet). */
+  text-align: start;
 }
 .maps-panel,
 .changelog-panel {
