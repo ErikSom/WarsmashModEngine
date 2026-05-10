@@ -1,5 +1,50 @@
 # What's new
 
+## 0.2.0 — May 2026
+
+The whole site has been rebuilt around a proper multiplayer lobby
+and a tidier menu.
+
+- **A real homepage.** Instead of dropping you straight onto the
+  game's boot screen, the site now opens with three tiles: Play,
+  Multiplayer, Manage assets. Pick your path.
+- **Dedicated Multiplayer page.** Set your player name once (it's
+  remembered), browse public lobbies, host a new one with a single
+  click, or join by code. Lobbies whose host has left are filtered
+  out automatically so the list stays clean.
+- **Proper lobby room.** Once you're in a lobby you see a Warcraft
+  III-style slot list with everyone's names, races, colours and
+  teams. Slots are grouped under each force — "The Horde",
+  "The Alliance", etc. — exactly as the map declares them.
+- **Pick your position.** Click an open slot to claim it; click a
+  different one to move. The host can close empty slots, kick
+  players (with confirmation), and change the map mid-lobby — if
+  the new map has fewer slots a confirmation lists who'd be removed.
+- **Race & colour pickers** for each player. Colour is a clickable
+  cube; click it for a small popup of all twelve Warcraft colours,
+  with already-taken ones visibly disabled. Race-locked maps (most
+  custom UMS games) display the locked race read-only.
+- **Map browser with search.** A new picker reads every map under
+  your install, shows the real map name + author + player count
+  + a thumbnail preview pulled from the map itself, and you can
+  filter the list by name, author, or path.
+- **Coloured map names.** Custom map names with embedded colour
+  codes (`|cffffaa00...|r`) render with the right colours instead
+  of the literal escape characters.
+- **In-game roster matches the lobby.** Race, colour and team picks
+  from the lobby now actually take effect when the game starts.
+  Previously the engine was using the map's defaults regardless.
+- **Phone & tablet friendly.** The lobby, map picker, and asset
+  manager reflow cleanly down to a phone in portrait orientation.
+- **Cleaner tab close.** Closing or refreshing the tab now tells
+  the signalling server you've left, so empty lobbies disappear
+  promptly instead of lingering for the GC window.
+
+Under the hood: the front end has been rewritten on Astro + Preact
+with view transitions, replacing the single-file legacy build. The
+multiplayer lobby exchanges its state over the same WebRTC mesh the
+game uses, with the host as authority for slot assignments.
+
 ## 0.1.2 — April 2026
 
 - **In-game performance.** Multi-second freezes are gone. The game

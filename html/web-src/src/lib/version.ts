@@ -6,7 +6,7 @@
  */
 
 // Bump on user-visible releases. Mirror the entry in html/CHANGELOG.md.
-export const VERSION = '0.1.2';
+export const VERSION = '0.2.0';
 
 // Wall-clock at module evaluation. Stable for the lifetime of the page,
 // changes per refresh — exactly what we want for a cache-buster.
