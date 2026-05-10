@@ -32,4 +32,17 @@ public interface ClientToServerListener {
 
 	void framesSkipped(long sessionToken, int nFramesSkipped);
 
+	/**
+	 * Periodic state-hash for desync detection. Server collects hashes
+	 * from all clients for the same {@code gameTurnTick}; mismatches are
+	 * logged. See {@link ClientToServerProtocol#STATE_HASH}.
+	 */
+	void stateHash(Object sourceAddress, long sessionToken, int gameTurnTick, long stateHash);
+
+	/**
+	 * Client's local state dump submitted in response to DESYNC_DETECTED.
+	 * See {@link ClientToServerProtocol#DESYNC_DUMP}.
+	 */
+	void desyncDump(Object sourceAddress, long sessionToken, int gameTurnTick, String localStateDump);
+
 }

@@ -103,6 +103,16 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 				final com.etheller.warsmash.html.network.WebMultiplayerCoordinator coord =
 						com.etheller.warsmash.html.network.WebMultiplayerCoordinator.get();
 				coord.attachGame(this);
+				// Install web desync-report handler — postMessages the main
+				// thread so it can render the diagnostic overlay (DOM-level,
+				// since the engine's libGDX UI is in the worker).
+				com.etheller.warsmash.networking.DesyncReport.install(
+						com.etheller.warsmash.html.network.WebDesyncReportBridge.HANDLER);
+				// Also install the client-info supplier — embeds the worker's
+				// navigator.userAgent + platform into each peer's state dump
+				// so the combined report shows everyone's environment.
+				com.etheller.warsmash.networking.DesyncReport.installClientInfoSupplier(
+						com.etheller.warsmash.html.network.WebDesyncReportBridge.CLIENT_INFO_SUPPLIER);
 				status("multiplayer: Poki Netlib bridge initialised; client starter + coordinator installed");
 			}
 			else {
@@ -177,8 +187,23 @@ public class WebWarsmashGame extends WarsmashGdxMultiScreenGame {
 		return this.statusLines;
 	}
 
+	/** One-shot guard: emit the engine-in-map signal to the main thread the
+	 *  first time we observe the WarsmashGdxMapScreen as the active screen.
+	 *  Used to drive the splash-cover-through-menu UX in multiplayer
+	 *  (lobby keeps the splash up until the actual map starts rendering). */
+	private boolean signalledEngineInMap = false;
+
 	@Override
 	public void render() {
+		if (!this.signalledEngineInMap
+				&& (getScreen() instanceof com.etheller.warsmash.WarsmashGdxMapScreen)) {
+			this.signalledEngineInMap = true;
+			// Use the same string-tagged postMessage convention the engine-
+			// worker uses for setScreen(WarsmashGdxMenuScreen) — index.html
+			// matches on substring rather than parsing structured messages.
+			com.etheller.warsmash.html.engineworker.EngineWorkerMain.postMessage(
+					"engine-worker: setScreen(WarsmashGdxMapScreen) returned");
+		}
 		drainWorkerLog();
 		if ((this.pendingMapSource != null) && (this.pendingMapPath != null)) {
 			final InMemoryDataSource source = this.pendingMapSource;

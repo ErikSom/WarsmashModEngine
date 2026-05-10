@@ -121,6 +121,52 @@ public class WarsmashClientWriter {
 		this.sendBuffer.putInt(skippedCount);
 	}
 
+	/**
+	 * Periodic state-hash report for desync detection.
+	 * Wire payload: protocol(4) + sessionToken(8) + gameTurnTick(4) + stateHash(8).
+	 */
+	public void stateHash(final int gameTurnTick, final long stateHash) {
+		this.sendBuffer.clear();
+		this.sendBuffer.putInt(4 + 8 + 4 + 8);
+		this.sendBuffer.putInt(ClientToServerProtocol.STATE_HASH);
+		this.sendBuffer.putLong(this.sessionToken);
+		this.sendBuffer.putInt(gameTurnTick);
+		this.sendBuffer.putLong(stateHash);
+	}
+
+	/** See {@link ClientToServerProtocol#DESYNC_DUMP}.
+	 *  Sized dynamically — local sim dumps for 100+ unit games can run
+	 *  10+ KB, well past the shared 1024-byte sendBuffer. We allocate a
+	 *  one-shot buffer here and route through the transport directly,
+	 *  same trick {@code WarsmashServerWriter.combinedDesyncReport} uses. */
+	public void desyncDump(final int gameTurnTick, final String localDump) {
+		final byte[] dumpBytes = localDump == null
+				? new byte[0]
+				: localDump.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		final int header = 4 + 4 + 8 + 4 + 4; // length + protocol + sessionToken + turnTick + dumpLen
+		final ByteBuffer buf = (header + dumpBytes.length <= this.sendBuffer.capacity())
+				? this.sendBuffer
+				: ByteBuffer.allocate(header + dumpBytes.length).order(ByteOrder.BIG_ENDIAN);
+		buf.clear();
+		buf.putInt(4 + 8 + 4 + 4 + dumpBytes.length);
+		buf.putInt(ClientToServerProtocol.DESYNC_DUMP);
+		buf.putLong(this.sessionToken);
+		buf.putInt(gameTurnTick);
+		buf.putInt(dumpBytes.length);
+		buf.put(dumpBytes);
+		// If we used a one-shot buffer, flush it directly via the
+		// transport (the canonical send() path reads from sendBuffer only).
+		if (buf != this.sendBuffer) {
+			buf.flip();
+			try {
+				this.client.send(buf);
+			}
+			catch (final IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
 	public void joinGame() {
 		this.sendBuffer.clear();
 		this.sendBuffer.putInt(4 + 8);

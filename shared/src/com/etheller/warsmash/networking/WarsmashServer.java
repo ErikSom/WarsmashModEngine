@@ -32,6 +32,12 @@ public class WarsmashServer implements ClientToServerListener {
 	private boolean gameStarted = false;
 	private long lastServerHeartbeatTime = 0;
 	private int joinCount = 0;
+	/** Set to true when {@link #stateHash} detects a hash mismatch. Once
+	 *  raised, {@link #finishedTurn} stops broadcasting the next turn —
+	 *  clients stall naturally on the next tick boundary because no new
+	 *  FINISHED_TURN message arrives. The desync overlay each client
+	 *  rendered locally takes over from there. */
+	private boolean haltedDueToDesync = false;
 
 	/**
 	 * Desktop convenience constructor — opens a UDP socket on {@code port} and
@@ -270,6 +276,11 @@ public class WarsmashServer implements ClientToServerListener {
 				allDone = false;
 			}
 		}
+		if (this.haltedDueToDesync) {
+			// Don't advance any further turns — clients stall here, the
+			// per-client desync overlay handles the user-facing report.
+			return;
+		}
 		if (allDone) {
 			for (final Runnable turnAction : this.turnActions) {
 				turnAction.run();
@@ -292,6 +303,186 @@ public class WarsmashServer implements ClientToServerListener {
 				this.lastServerHeartbeatTime = currentTimeMillis;
 			}
 		}
+	}
+
+	// Per-desync-event collection of client local dumps for the combined
+	// report. Cleared once we've broadcast the combined report.
+	private final Map<Object, String> desyncDumpsByAddress = new HashMap<>();
+	private int desyncTurnAwaitingDumps = -1;
+	/** Hash list summary captured at desync detection — included verbatim
+	 *  in the combined report so users see all peer hashes alongside the
+	 *  per-peer dumps. */
+	private String desyncHashListSummary = "";
+
+	@Override
+	public void desyncDump(final Object sourceAddress, final long sessionToken, final int gameTurnTick,
+			final String localStateDump) {
+		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
+		if (playerIndex == -1) {
+			return;
+		}
+		this.desyncDumpsByAddress.put(sourceAddress, localStateDump == null ? "" : localStateDump);
+		// Wait until we have one dump per known client (or per allocated
+		// session-token slot, whichever is smaller — disconnected clients
+		// just don't show up). Then build + broadcast the combined report.
+		if (this.desyncDumpsByAddress.size() < this.sessionTokenToPermittedSlot.size()) {
+			return;
+		}
+		final StringBuilder combined = new StringBuilder();
+		combined.append("=== Combined desync report (turn ").append(gameTurnTick).append(") ===\n");
+		combined.append("Per-peer state hashes (from server):\n");
+		combined.append(this.desyncHashListSummary);
+		combined.append('\n');
+		// Line-by-line diff across peers — the actionable section. Dumps
+		// are aligned (same turn snapshot, same handle-id sort), so a
+		// straight per-line comparison surfaces the divergent rows
+		// directly. User can paste just this section in a bug report and
+		// it tells us exactly which units' state differs.
+		combined.append(buildDivergentRowsSection(this.desyncDumpsByAddress));
+		// Followed by the full per-peer dumps so the user can also see
+		// the full context if they want.
+		for (final Map.Entry<Object, String> e : this.desyncDumpsByAddress.entrySet()) {
+			combined.append("\n--- Full dump from ").append(e.getKey()).append(" ---\n");
+			combined.append(e.getValue());
+		}
+		this.writer.combinedDesyncReport(gameTurnTick, combined.toString());
+		// combinedDesyncReport's writer flushes its own buffer (large
+		// payloads bypass the shared sendBuffer); no extra send() needed.
+		this.desyncDumpsByAddress.clear();
+		this.desyncTurnAwaitingDumps = -1;
+		this.desyncHashListSummary = "";
+	}
+
+	/**
+	 * Per-line diff across peer dumps. Both client dumps are produced by
+	 * {@code CSimulation.dumpDebugState} which emits a fixed structure
+	 * (header lines + units sorted by handleId), so the same line index
+	 * means the same logical row across clients. This walks line-by-line
+	 * and emits only the rows that disagree, with each peer's value.
+	 *
+	 * <p>Falls back to a "(no per-line divergence)" note if dumps are
+	 * line-by-line identical — which can happen if the divergence was
+	 * salt-only or otherwise outside the dump's scope (e.g. a different
+	 * RNG state that hasn't yet manifested in unit positions).
+	 */
+	private static String buildDivergentRowsSection(final Map<Object, String> dumps) {
+		if (dumps.size() < 2) {
+			return "Divergent rows:\n  (only one peer reported a dump — nothing to diff)\n";
+		}
+		// Linearise the map into parallel arrays so we can iterate by
+		// peer position consistently (HashMap iteration order is fine
+		// here because we only care about within-iteration consistency).
+		final java.util.List<Object> peerKeys = new java.util.ArrayList<>(dumps.keySet());
+		final java.util.List<String[]> peerLines = new java.util.ArrayList<>();
+		int maxLines = 0;
+		for (final Object key : peerKeys) {
+			final String[] lines = dumps.get(key).split("\n", -1);
+			peerLines.add(lines);
+			if (lines.length > maxLines) {
+				maxLines = lines.length;
+			}
+		}
+		final StringBuilder sb = new StringBuilder();
+		sb.append("Divergent rows (line-by-line diff across peer dumps):\n");
+		int divergentCount = 0;
+		for (int i = 0; i < maxLines; i++) {
+			String first = null;
+			boolean differs = false;
+			for (final String[] lines : peerLines) {
+				final String line = (i < lines.length) ? lines[i] : "(missing)";
+				if (first == null) {
+					first = line;
+				}
+				else if (!first.equals(line)) {
+					differs = true;
+					break;
+				}
+			}
+			if (differs) {
+				divergentCount++;
+				sb.append("  line ").append(i).append(":\n");
+				for (int p = 0; p < peerKeys.size(); p++) {
+					final String[] lines = peerLines.get(p);
+					sb.append("    ").append(peerKeys.get(p)).append(": ");
+					sb.append(i < lines.length ? lines[i] : "(missing)");
+					sb.append('\n');
+				}
+			}
+		}
+		if (divergentCount == 0) {
+			sb.append("  (no per-line divergence — dumps are byte-identical, but hashes differ;"
+					+ " divergence is in state outside the dump's scope, likely RNG counter)\n");
+		}
+		else {
+			sb.insert("Divergent rows (line-by-line diff across peer dumps):\n".length(),
+					"  " + divergentCount + " divergent row(s).\n");
+		}
+		return sb.toString();
+	}
+
+	// Per-turn collection of client state hashes for desync detection.
+	// Keyed by gameTurnTick → (clientAddress → hash). When all clients
+	// have reported for a turn, compare; on mismatch log loudly. Cleaned
+	// up when consensus is reached so the map doesn't grow unboundedly.
+	private final Map<Integer, Map<Object, Long>> turnToClientStateHash = new HashMap<>();
+
+	@Override
+	public void stateHash(final Object sourceAddress, final long sessionToken, final int gameTurnTick,
+			final long hashValue) {
+		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
+		if (playerIndex == -1) {
+			return;
+		}
+		Map<Object, Long> hashesForTurn = this.turnToClientStateHash.get(gameTurnTick);
+		if (hashesForTurn == null) {
+			hashesForTurn = new HashMap<>();
+			this.turnToClientStateHash.put(gameTurnTick, hashesForTurn);
+		}
+		hashesForTurn.put(sourceAddress, hashValue);
+		if (hashesForTurn.size() < this.sessionTokenToPermittedSlot.size()) {
+			return;
+		}
+		// All clients reported for this turn. Compare.
+		Long reference = null;
+		boolean diverged = false;
+		for (final Long h : hashesForTurn.values()) {
+			if (reference == null) {
+				reference = h;
+			}
+			else if (!reference.equals(h)) {
+				diverged = true;
+				break;
+			}
+		}
+		if (diverged) {
+			final StringBuilder sb = new StringBuilder();
+			sb.append("DESYNC at gameTurnTick=").append(gameTurnTick).append(":");
+			for (final Map.Entry<Object, Long> e : hashesForTurn.entrySet()) {
+				sb.append(' ').append(e.getKey()).append("=0x")
+						.append(Long.toHexString(e.getValue()));
+			}
+			System.err.println(sb.toString());
+			// Build a human-readable per-peer summary for the diagnostic
+			// overlay each client will render. One line per peer makes it
+			// easy to scan in the modal and to paste into a bug report.
+			final StringBuilder summary = new StringBuilder();
+			for (final Map.Entry<Object, Long> e : hashesForTurn.entrySet()) {
+				summary.append(e.getKey()).append(" = 0x")
+						.append(Long.toHexString(e.getValue()))
+						.append('\n');
+			}
+			this.haltedDueToDesync = true;
+			this.desyncTurnAwaitingDumps = gameTurnTick;
+			this.desyncHashListSummary = summary.toString();
+			this.desyncDumpsByAddress.clear();
+			this.writer.desyncDetected(gameTurnTick, summary.toString());
+			this.writer.send();
+		}
+		else if (VERBOSE_LOGGING) {
+			System.out.println("stateHash consensus at turn " + gameTurnTick + ": 0x"
+					+ Long.toHexString(reference));
+		}
+		this.turnToClientStateHash.remove(gameTurnTick);
 	}
 
 	public static void main(final String[] args) {

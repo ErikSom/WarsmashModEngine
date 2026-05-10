@@ -236,6 +236,36 @@
 
 	<div id="version" title="View changelog"></div>
 
+	<!-- Desync diagnostic overlay: hidden until the engine-worker posts
+	     a 'mp-desync-report' message. Renders a copyable textarea + a
+	     "Copy" button so the user can grab the full diagnostic and share
+	     it. Sits above everything else (z-index high) and intentionally
+	     blocks engine input — the simulation has been halted server-side
+	     anyway, so there's nothing the user could do with the canvas. -->
+	<div id="desync-overlay" style="display:none; position:fixed; inset:0; z-index:1000;
+	     background:rgba(10,12,18,0.96); color:#d8dde6; font-family:system-ui, sans-serif;
+	     padding:20px; box-sizing:border-box; overflow:auto;">
+		<div style="max-width:900px; margin:0 auto;">
+			<h2 style="color:#f88; margin:0 0 4px 0;">Multiplayer desync detected</h2>
+			<p style="color:#aac; margin:0 0 16px 0; line-height:1.5;">
+				The simulation has been halted because the game state diverged between players.
+				This is a bug — please copy the report below and share it with the developers.
+			</p>
+			<div style="margin-bottom:8px;">
+				<button id="desync-copy-btn" style="background:#3a6a3a; color:white; border:none;
+				     padding:8px 14px; border-radius:4px; cursor:pointer; font-size:13px;">Copy report</button>
+				<button id="desync-reload-btn" style="background:#5a3a3a; color:white; border:none;
+				     padding:8px 14px; border-radius:4px; cursor:pointer; font-size:13px; margin-left:8px;">Reload page</button>
+				<span id="desync-copy-status" style="color:#8c8; margin-left:10px; font-size:12px;"></span>
+			</div>
+			<textarea id="desync-textarea" readonly
+			          style="width:100%; height:60vh; background:#11141a; color:#cdd;
+			          border:1px solid #4a5366; border-radius:4px; padding:10px;
+			          font-family:ui-monospace, Menlo, monospace; font-size:12px; box-sizing:border-box;
+			          white-space:pre; overflow:auto;"></textarea>
+		</div>
+	</div>
+
 	<!-- Multiplayer lobby overlay: appears in the bottom-right once the
 	     engine has booted and WebMultiplayerCoordinator has bound the
 	     warsmash* lobby functions to the global. Pure DOM — does not
@@ -362,6 +392,21 @@
 				engineWorker.postMessage({ kind: 'mp-peer-connected', peerId: peerId });
 			});
 		}
+		// Debug helper, exposed at page-load. After the engine-worker is
+		// attached AND the multiplayer game is running, calling
+		// window.desyncTest() from DevTools mutates one unit's hp by +1.0
+		// on this client only. The state-hash report at the next 30-turn
+		// checkpoint should then show a DESYNC line on the host's worker
+		// console — confirming the detection scaffolding is wired correctly.
+		window.desyncTest = function () {
+			if (!engineWorker) {
+				console.warn('[debug] desyncTest: engine worker not attached yet');
+				return;
+			}
+			engineWorker.postMessage({ kind: 'mp-debug-desync' });
+			console.log('[debug] desyncTest: sent mp-debug-desync to worker');
+		};
+
 		window.__mpAttachWorker = function (w) {
 			engineWorker = w;
 			// Worker comes up AFTER netlib has been doing its thing, so
@@ -400,6 +445,12 @@
 					case 'mp-handler-ready':
 						replayStateToWorker();
 						break;
+					case 'mp-desync-report':
+						showDesyncOverlay(d);
+						break;
+					case 'mp-desync-combined-report':
+						showCombinedDesyncOverlay(d);
+						break;
 				}
 			});
 			logEvent('engine-worker attached');
@@ -409,6 +460,38 @@
 		function postToWorker(msg) {
 			if (engineWorker) engineWorker.postMessage(msg);
 		}
+
+		// Engine-readiness tracking for "lobby drives the engine boot".
+		// startMultiplayerGameDirect on the worker side requires MenuUI to
+		// exist (set up by WarsmashGdxMenuScreen.show()), so we have to
+		// defer the mp-start-as-{host,joiner} postMessage until the engine
+		// reaches the menu screen. Track that state here, queue any pending
+		// start, and drain when ready.
+		var engineMenuReady = false;
+		var pendingStartForWorker = null; // postMessage payload, fired when menu is ready
+		function ensureEngineBootedAndQueueStart(workerMsg) {
+			pendingStartForWorker = workerMsg;
+			if (typeof window.__engineStarted === 'function' && !window.__engineStarted()) {
+				logEvent('booting engine for multiplayer start...', '#aac');
+				if (typeof window.__startEngine === 'function') {
+					window.__startEngine();
+				}
+			}
+			// If menu's already ready (engine was pre-booted), fire now.
+			drainPendingStart();
+		}
+		function drainPendingStart() {
+			if (engineMenuReady && pendingStartForWorker && engineWorker) {
+				engineWorker.postMessage(pendingStartForWorker);
+				pendingStartForWorker = null;
+			}
+		}
+		// Called by the worker→main message handler when it spots the
+		// "engine-worker: setScreen(WarsmashGdxMenuScreen) returned" log line.
+		window.__mpOnMenuReady = function () {
+			engineMenuReady = true;
+			drainPendingStart();
+		};
 
 		function logEvent(text, color) {
 			var d = document.createElement('div');
@@ -471,8 +554,15 @@
 		startBtn.onclick = function () {
 			var mapPath = mapPathEl.value.trim();
 			if (!mapPath) { logEvent('enter a map path first', '#f88'); return; }
-			if (!engineWorker) { logEvent('engine not booted — click "Play game" first', '#f88'); return; }
-			if (!weAreHost)    { logEvent('only the host can start', '#f88'); return; }
+			if (!weAreHost) { logEvent('only the host can start', '#f88'); return; }
+			// Mask the menu→map transition with the splash overlay. The
+			// engine still has to construct WarsmashGdxMenuScreen briefly
+			// (it owns loadAndCacheMapConfigs + startMultiplayerGameDirect)
+			// but the user never sees it — splash stays up until
+			// setScreen(WarsmashGdxMapScreen) fires. If the engine was
+			// already past the menu screen, ensure the splash is shown.
+			window.__mpPendingStart = true;
+			if (typeof showSplash === 'function') showSplash();
 
 			var selfId = (typeof self.pokiBridgeSelfId === 'function') ? self.pokiBridgeSelfId() : '';
 			if (!selfId) { logEvent('no self id from netlib yet', '#f88'); return; }
@@ -511,7 +601,10 @@
 			// Local: tell our own engine-worker to start as host. Same shape
 			// as what we just sent to joiners, but with our own token + slot.
 			var hostMsg = startMessageForWorker(true, mapPath, selfId, String(hostToken), '0', sessionTokenToSlotMap);
-			postToWorker(hostMsg);
+			// Boots the engine if needed and queues the start until MenuUI
+			// is ready (setScreen WarsmashGdxMenuScreen). Drops the user
+			// straight from lobby into the multiplayer map under the splash.
+			ensureEngineBootedAndQueueStart(hostMsg);
 
 			startBtn.disabled = true; startBtn.style.opacity = '0.5';
 			logEvent('starting game (host) with map ' + mapPath + ', ' + perPeer.length + ' peer(s)', '#8c8');
@@ -552,6 +645,68 @@
 			return new TextDecoder().decode(buf);
 		}
 
+		function showDesyncOverlay(report) {
+			var overlay = document.getElementById('desync-overlay');
+			var ta = document.getElementById('desync-textarea');
+			var copyBtn = document.getElementById('desync-copy-btn');
+			var copyStatus = document.getElementById('desync-copy-status');
+			var reloadBtn = document.getElementById('desync-reload-btn');
+			if (!overlay || !ta) return;
+			// Open the modal in a loading state. The user-facing report is
+			// the combined one (every client's state side-by-side), which
+			// arrives a beat later via mp-desync-combined-report. Rendering
+			// just-our-local data first would be a half-useful snapshot
+			// the user has no reason to copy — better to wait for the
+			// final aggregate.
+			ta.value = 'Loading combined desync report from server...\n\n'
+				+ '(Game has been halted. The server is collecting state dumps from all '
+				+ 'clients to build a single comparable report. This usually arrives '
+				+ 'within a second.)';
+			overlay.style.display = 'block';
+
+			copyBtn.onclick = function () {
+				ta.focus();
+				ta.select();
+				var ok = false;
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					navigator.clipboard.writeText(ta.value).then(function () {
+						copyStatus.textContent = 'copied!';
+						setTimeout(function () { copyStatus.textContent = ''; }, 2000);
+					}, function (err) {
+						copyStatus.textContent = 'clipboard error: ' + err;
+					});
+				} else {
+					try { ok = document.execCommand('copy'); }
+					catch (e) { copyStatus.textContent = 'copy failed: ' + e; }
+					if (ok) {
+						copyStatus.textContent = 'copied!';
+						setTimeout(function () { copyStatus.textContent = ''; }, 2000);
+					}
+				}
+			};
+			reloadBtn.onclick = function () { location.reload(); };
+		}
+
+		function showCombinedDesyncOverlay(report) {
+			var overlay = document.getElementById('desync-overlay');
+			var ta = document.getElementById('desync-textarea');
+			var titleH2 = overlay && overlay.querySelector('h2');
+			if (!overlay || !ta) return;
+			var lines = [];
+			lines.push('=== Warsmash multiplayer desync — combined report ===');
+			lines.push('Generated: ' + new Date().toISOString());
+			lines.push('Build path: ' + location.href);
+			lines.push('User agent: ' + navigator.userAgent);
+			lines.push('Lobby: ' + ((typeof self.pokiBridgeCurrentLobby === 'function') ? self.pokiBridgeCurrentLobby() : '(unknown)'));
+			lines.push('This peer id: ' + ((typeof self.pokiBridgeSelfId === 'function') ? self.pokiBridgeSelfId() : '(unknown)'));
+			lines.push('Game turn at desync: ' + report.turn);
+			lines.push('');
+			lines.push(report.combinedReport || '(empty combined report)');
+			ta.value = lines.join('\n');
+			if (titleH2) titleH2.textContent = 'Multiplayer desync — combined report';
+			overlay.style.display = 'block';
+		}
+
 		function handleControlMessage(peerId, payload) {
 			var msg;
 			try { msg = JSON.parse(payload); }
@@ -565,12 +720,17 @@
 					mySlot = msg.mySlot;
 					sessionTokenToSlotMap = msg.sessionTokenToSlot || {};
 					hostPeerId = msg.hostPeerId || peerId;
-					if (!engineWorker) {
-						logEvent('start-as-joiner received but engine not booted yet', '#f88');
-						return;
-					}
+					// Same splash-cover trick the host does — keep the splash
+					// up so the joiner doesn't see the WC3 menu flash on the
+					// way to the multiplayer map.
+					window.__mpPendingStart = true;
+					if (typeof showSplash === 'function') showSplash();
 					var jMsg = startMessageForWorker(false, msg.mapPath, hostPeerId, mySessionToken, mySlot, sessionTokenToSlotMap);
-					postToWorker(jMsg);
+					// Auto-boots the engine if not started, then queues the
+					// start until MenuUI is ready. Joiner doesn't have to
+					// click "Play game" — just receiving start-as-joiner
+					// drives the entire boot+map flow.
+					ensureEngineBootedAndQueueStart(jMsg);
 					logEvent('joining game (slot ' + mySlot + ') with map ' + msg.mapPath, '#8c8');
 					break;
 				default:
@@ -1097,6 +1257,13 @@
 			}
 		}
 
+		// Exposed so the multiplayer lobby (in a different <script> block)
+		// can boot the engine on demand — letting the user open the page,
+		// join a lobby, click Start, and end up in the map without ever
+		// clicking "Play game" themselves.
+		window.__startEngine = function () { startEngine(); };
+		window.__engineStarted = function () { return engineStarted; };
+
 		function startEngine() {
 			engineStarted = true;
 			acquireWakeLock();
@@ -1146,8 +1313,30 @@
 					// First frame the user actually wants to see: the engine has
 					// installed WarsmashGdxMenuScreen. Drop the splash so the
 					// chains-drop intro is visible from frame 0.
-					if (typeof m === 'string' && m.indexOf('setScreen(WarsmashGdxMenuScreen)') !== -1) {
-						hideSplash();
+					//
+					// EXCEPT in multiplayer: when the host has fired Start, we
+					// keep the splash up THROUGH the menu transition so users
+					// never see the WC3 main menu flash. Splash drops once the
+					// engine reaches WarsmashGdxMapScreen (the actual game).
+					if (typeof m === 'string') {
+						if (m.indexOf('setScreen(WarsmashGdxMapScreen)') !== -1) {
+							// Reached the multiplayer map — splash off, game on.
+							window.__mpInMap = true;
+							hideSplash();
+						}
+						else if (m.indexOf('setScreen(WarsmashGdxMenuScreen)') !== -1) {
+							// Reached the menu. Tell the lobby coordinator
+							// it's safe to fire any deferred start command.
+							if (typeof window.__mpOnMenuReady === 'function') {
+								window.__mpOnMenuReady();
+							}
+							// Hide the splash UNLESS we're in the middle of
+							// a multiplayer-pending-start, where we want to
+							// mask the menu→map transition.
+							if (!window.__mpPendingStart) {
+								hideSplash();
+							}
+						}
 					}
 				}
 			});

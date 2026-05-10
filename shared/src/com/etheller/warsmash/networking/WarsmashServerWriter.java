@@ -136,6 +136,64 @@ public class WarsmashServerWriter implements ServerToClientListener {
 	}
 
 	@Override
+	public void combinedDesyncReport(final int gameTurnTick, final String combinedReport) {
+		// Wire payload: length(4) + protocol(4) + turnTick(4) + reportLength(4) + reportBytes(N) = 16 + N bytes total.
+		final byte[] reportBytes = combinedReport == null
+				? new byte[0]
+				: combinedReport.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		// Allocate a fresh buffer if the combined report is large — the
+		// fixed 1KB sendBuffer can't hold it. Combined dumps with full
+		// unit lists for 2+ players easily run 10–20 KB.
+		final int totalLen = 16 + reportBytes.length;
+		final ByteBuffer buf = (totalLen <= this.sendBuffer.capacity())
+				? this.sendBuffer
+				: ByteBuffer.allocate(totalLen).order(ByteOrder.BIG_ENDIAN);
+		buf.clear();
+		buf.putInt(4 + 4 + 4 + reportBytes.length);
+		buf.putInt(ServerToClientProtocol.COMBINED_DESYNC_REPORT);
+		buf.putInt(gameTurnTick);
+		buf.putInt(reportBytes.length);
+		buf.put(reportBytes);
+		// If we used a custom buffer, route it through the same send path
+		// the canonical sendBuffer would: temporarily swap sendBuffer's
+		// position/limit so send() flushes our oversized buf instead.
+		// Cleaner alternative: have a dedicated send-large path. For now
+		// we just send via a separate flush since send() reads sendBuffer.
+		if (buf != this.sendBuffer) {
+			buf.flip();
+			try {
+				for (final Object address : this.allKnownAddressesToSend) {
+					final int pos = buf.position();
+					final int limit = buf.limit();
+					this.server.send(address, buf);
+					buf.position(pos);
+					buf.limit(limit);
+				}
+			}
+			catch (final IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+	@Override
+	public void desyncDetected(final int gameTurnTick, final String peerHashSummary) {
+		// Wire payload: protocol(4) + turnTick(4) + summaryLength(4) + summaryBytes(N).
+		// Peer-hash summary is a human-readable multi-line string keyed by
+		// peer id; clients display it verbatim in the diagnostic overlay
+		// so the user can share it with us.
+		final byte[] summaryBytes = peerHashSummary == null
+				? new byte[0]
+				: peerHashSummary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		this.sendBuffer.clear();
+		this.sendBuffer.putInt(4 + 4 + 4 + summaryBytes.length);
+		this.sendBuffer.putInt(ServerToClientProtocol.DESYNC_DETECTED);
+		this.sendBuffer.putInt(gameTurnTick);
+		this.sendBuffer.putInt(summaryBytes.length);
+		this.sendBuffer.put(summaryBytes);
+	}
+
+	@Override
 	public void startGame() {
 		this.sendBuffer.clear();
 		this.sendBuffer.putInt(4);

@@ -61,6 +61,12 @@ import com.etheller.warsmash.viewer5.handlers.w3x.ui.toggle.MeleeToggleUI;
 public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 	public static final boolean ENABLE_AUDIO = true;
 	private final War3MapViewer viewer;
+
+	/** Web/multiplayer hook: lets the coordinator reach into the live
+	 *  simulation (e.g. for the manual-desync debug trigger). */
+	public War3MapViewer getViewer() {
+		return this.viewer;
+	}
 	private final Rectangle tempRect = new Rectangle();
 
 	// libGDX stuff

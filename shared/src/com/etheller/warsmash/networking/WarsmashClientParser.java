@@ -134,6 +134,24 @@ public class WarsmashClientParser implements OrderedUdpClientListener {
 					this.listener.heartbeat();
 					break;
 				}
+				case ServerToClientProtocol.DESYNC_DETECTED: {
+					final int gameTurnTick = buffer.getInt();
+					final int summaryLen = buffer.getInt();
+					final byte[] summaryBytes = new byte[summaryLen];
+					buffer.get(summaryBytes);
+					final String summary = new String(summaryBytes, java.nio.charset.StandardCharsets.UTF_8);
+					this.listener.desyncDetected(gameTurnTick, summary);
+					break;
+				}
+				case ServerToClientProtocol.COMBINED_DESYNC_REPORT: {
+					final int gameTurnTick = buffer.getInt();
+					final int reportLen = buffer.getInt();
+					final byte[] reportBytes = new byte[reportLen];
+					buffer.get(reportBytes);
+					final String report = new String(reportBytes, java.nio.charset.StandardCharsets.UTF_8);
+					this.listener.combinedDesyncReport(gameTurnTick, report);
+					break;
+				}
 
 				default:
 					System.err.println("Got unknown protocol: " + protocol);

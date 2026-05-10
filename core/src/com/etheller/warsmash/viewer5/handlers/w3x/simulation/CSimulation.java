@@ -257,6 +257,93 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		return this.units;
 	}
 
+	/**
+	 * Stable hash over critical simulation state for lockstep desync
+	 * detection. Computed by XOR-of-per-unit hashes — order-independent,
+	 * so the result doesn't depend on this.units' iteration order (which
+	 * could in principle differ between machines if removal timing differs).
+	 *
+	 * <p>What we hash, per unit: handleId + position (x, y) + life + mana +
+	 * playerIndex. That's the minimum to catch combat / movement / income
+	 * divergence, which covers the dominant desync sources for a lockstep
+	 * RTS. We could expand later (orders queue, buffs, cooldowns) if a
+	 * desync slips through this.
+	 *
+	 * <p>Cost: ~50ns per unit, ~10us for a heavy 200-unit game. Cheap
+	 * enough to run every turn; sampling every Nth turn saves wire bytes
+	 * but the local CPU saving is rounding error.
+	 */
+	public long computeStateHash() {
+		long total = 0L;
+		for (final CUnit unit : this.units) {
+			long h = 0xcbf29ce484222325L; // FNV-1a 64-bit offset basis
+			h = mixHash(h, unit.getHandleId());
+			h = mixHash(h, Float.floatToRawIntBits(unit.getX()));
+			h = mixHash(h, Float.floatToRawIntBits(unit.getY()));
+			h = mixHash(h, Float.floatToRawIntBits(unit.getLife()));
+			h = mixHash(h, Float.floatToRawIntBits(unit.getMana()));
+			h = mixHash(h, unit.getPlayerIndex());
+			total ^= h;
+		}
+		// Debug-only desync injection point — incremented by manual
+		// tooling (window.desyncTest() in the web build) to force a
+		// hash divergence on a single client, used to verify the desync
+		// detection scaffolding is wired correctly. Always 0 in real games.
+		return total ^ (this.debugDesyncSalt * 0x9E3779B97F4A7C15L);
+	}
+
+	/** Debug-only counter; always 0 in real games. See
+	 *  {@link #computeStateHash} and {@link #debugBumpDesyncSalt}. */
+	private long debugDesyncSalt = 0L;
+
+	public void debugBumpDesyncSalt() {
+		this.debugDesyncSalt++;
+	}
+
+	/**
+	 * Dump per-unit critical state as plain text, used by the desync
+	 * diagnostic overlay so the user has something concrete to share with
+	 * developers. Sorted by handleId so the same simulation produces the
+	 * same dump regardless of internal list ordering — makes it easy to
+	 * diff dumps from different clients side-by-side.
+	 */
+	public String dumpDebugState() {
+		final java.util.List<CUnit> sortedUnits = new java.util.ArrayList<>(this.units);
+		java.util.Collections.sort(sortedUnits, new java.util.Comparator<CUnit>() {
+			@Override
+			public int compare(final CUnit a, final CUnit b) {
+				return Integer.compare(a.getHandleId(), b.getHandleId());
+			}
+		});
+		final StringBuilder sb = new StringBuilder();
+		// Per-peer client environment (browser/userAgent on web, etc.).
+		// Empty on desktop unless a supplier was installed. Embedded here
+		// so the server's combined report shows each peer's platform side
+		// by side — handy for triaging cross-browser / cross-OS desyncs.
+		final String clientInfo = com.etheller.warsmash.networking.DesyncReport.getClientInfo();
+		if (!clientInfo.isEmpty()) {
+			sb.append("client: ").append(clientInfo).append('\n');
+		}
+		sb.append("debugDesyncSalt = ").append(this.debugDesyncSalt).append('\n');
+		sb.append("units (").append(sortedUnits.size()).append("):\n");
+		for (final CUnit u : sortedUnits) {
+			sb.append("  handle=").append(u.getHandleId())
+				.append(" owner=").append(u.getPlayerIndex())
+				.append(" x=").append(u.getX())
+				.append(" y=").append(u.getY())
+				.append(" life=").append(u.getLife())
+				.append(" mana=").append(u.getMana())
+				.append('\n');
+		}
+		return sb.toString();
+	}
+
+	private static long mixHash(long h, final long value) {
+		h ^= value;
+		h *= 0x100000001b3L; // FNV-1a 64-bit prime
+		return h;
+	}
+
 	public List<CDestructable> getDestructables() {
 		return this.destructables;
 	}

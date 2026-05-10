@@ -129,6 +129,23 @@ public class WarsmashServerParser implements OrderedUdpServerListener {
 					this.listener.framesSkipped(sessionToken, nFramesSkipped);
 					break;
 				}
+				case ClientToServerProtocol.STATE_HASH: {
+					final long sessionToken = buffer.getLong();
+					final int gameTurnTick = buffer.getInt();
+					final long stateHash = buffer.getLong();
+					this.listener.stateHash(sourceAddress, sessionToken, gameTurnTick, stateHash);
+					break;
+				}
+				case ClientToServerProtocol.DESYNC_DUMP: {
+					final long sessionToken = buffer.getLong();
+					final int gameTurnTick = buffer.getInt();
+					final int dumpLen = buffer.getInt();
+					final byte[] dumpBytes = new byte[dumpLen];
+					buffer.get(dumpBytes);
+					final String dump = new String(dumpBytes, java.nio.charset.StandardCharsets.UTF_8);
+					this.listener.desyncDump(sourceAddress, sessionToken, gameTurnTick, dump);
+					break;
+				}
 
 				default:
 					System.err.println("Got unknown protocol: " + protocol);

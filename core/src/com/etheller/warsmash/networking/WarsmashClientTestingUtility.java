@@ -114,6 +114,18 @@ public class WarsmashClientTestingUtility implements ServerToClientListener {
 		System.out.println();
 	}
 
+	@Override
+	public void desyncDetected(final int gameTurnTick, final String peerHashSummary) {
+		System.out.println("WarsmashClientTestingUtility.desyncDetected turn=" + gameTurnTick);
+		System.out.println(peerHashSummary);
+	}
+
+	@Override
+	public void combinedDesyncReport(final int gameTurnTick, final String combinedReport) {
+		System.out.println("WarsmashClientTestingUtility.combinedDesyncReport turn=" + gameTurnTick);
+		System.out.println(combinedReport);
+	}
+
 	public static void main(final String[] args) {
 		final long sessionToken = 1337002L;
 		try {

@@ -31,9 +31,12 @@ public abstract class OrderedUdpCommuncation implements UdpClientListener {
 	}
 
 	public void send(final ByteBuffer data) throws IOException {
-		final ByteBuffer writeBuffer = ByteBuffer.allocate(1024).order(ByteOrder.BIG_ENDIAN);
+		// Size the seq-no stamp buffer to fit the actual payload + 8-byte
+		// header (msg-kind int + seqNo int).
+		final int dataLen = data.remaining();
+		final ByteBuffer writeBuffer = ByteBuffer.allocate(8 + dataLen).order(ByteOrder.BIG_ENDIAN);
 		writeBuffer.clear();
-		final Integer seqNo = this.nextSendSeqNo; // only autobox once, would be ideal to not box at all
+		final Integer seqNo = this.nextSendSeqNo;
 		writeBuffer.putInt(ORDERED_UDP_MESSAGE);
 		writeBuffer.putInt(seqNo);
 		writeBuffer.put(data);

@@ -26,4 +26,19 @@ public interface ServerToClientListener {
 	void finishedTurn(int gameTurnTick);
 
 	void heartbeat();
+
+	/**
+	 * Lockstep desync was detected. {@code peerHashSummary} is a human-
+	 * readable multi-line string: one peer per line, "{@code peer:<id> = 0x<hash>}".
+	 * Clients should halt simulation, gather diagnostic state, and surface
+	 * a copyable report to the user. See {@link ServerToClientProtocol#DESYNC_DETECTED}.
+	 */
+	void desyncDetected(int gameTurnTick, String peerHashSummary);
+
+	/**
+	 * Combined desync report aggregated by the server from all clients'
+	 * dumps. Replaces the initial local-only modal contents on each
+	 * client. See {@link ServerToClientProtocol#COMBINED_DESYNC_REPORT}.
+	 */
+	void combinedDesyncReport(int gameTurnTick, String combinedReport);
 }

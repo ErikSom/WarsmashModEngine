@@ -2797,6 +2797,16 @@ public class MenuUI {
 		Gdx.app.postRunnable(new Runnable() {
 			@Override
 			public void run() {
+				try { runUnsafe(); }
+				catch (final Throwable t) {
+					System.err.println("startMultiplayerGameDirect postRunnable threw: " + t.getClass().getName()
+							+ ": " + t.getMessage());
+					t.printStackTrace(System.err);
+					throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+				}
+			}
+
+			void runUnsafe() {
 				// Mirror the visibility resets the BattleNet handler does so
 				// the engine ends up in a clean state regardless of which UI
 				// path the user took to get here. Most of these are no-ops on

@@ -253,6 +253,45 @@ public final class WebMultiplayerCoordinator {
 		jsAddStartListener("mp-start-as-joiner", new EngineStartCb() {
 			@Override public void call(final EngineStartParams p) { handler.onStartAsJoiner(p); }
 		});
+		// Debug-only: manual desync trigger. Main thread exposes
+		// window.desyncTest(); calling it postMessages the worker, which
+		// mutates a single unit's hp by +1.0 — locally only, so the next
+		// state-hash report after this fires will diverge from the other
+		// client(s). Use to verify the desync-detection scaffolding works.
+		jsAddStartListener("mp-debug-desync", new EngineStartCb() {
+			@Override public void call(final EngineStartParams p) {
+				if (INSTANCE != null) INSTANCE.triggerDebugDesync();
+			}
+		});
+	}
+
+	private void triggerDebugDesync() {
+		if (this.game == null) {
+			System.err.println("[debug] desyncTest: engine not attached");
+			return;
+		}
+		final com.badlogic.gdx.Screen screen = this.game.getScreen();
+		if (!(screen instanceof com.etheller.warsmash.WarsmashGdxMapScreen)) {
+			System.err.println("[debug] desyncTest: not in a multiplayer map yet (screen="
+					+ (screen == null ? "null" : screen.getClass().getSimpleName()) + ")");
+			return;
+		}
+		final com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer viewer =
+				((com.etheller.warsmash.WarsmashGdxMapScreen) screen).getViewer();
+		if (viewer == null || viewer.simulation == null) {
+			System.err.println("[debug] desyncTest: no live simulation");
+			return;
+		}
+		// Bump the simulation's debug salt — mixed into computeStateHash
+		// directly, so the very next state-hash report at the 30-turn
+		// boundary will diverge from other clients regardless of what's
+		// happening in the game (no need to wait for combat / RNG usage).
+		// Pure non-invasive: doesn't touch JASS, doesn't fire engine
+		// events, doesn't mutate any real game state — only the
+		// debug-only hash salt that's always 0 in production paths.
+		viewer.simulation.debugBumpDesyncSalt();
+		System.err.println("[debug] desyncTest: bumped debugDesyncSalt on this client only; "
+				+ "expect DESYNC line on host at next state-hash turn (every 30 turns ≈ 7s)");
 	}
 
 	@JSBody(params = { "kind", "cb" }, script = ""
