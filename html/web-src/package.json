@@ -2,22 +2,18 @@
   "name": "warsmash-web-src",
   "version": "0.0.0",
   "private": true,
-  "description": "Modern-bundled web sources for the Warsmash HTML5 port. Parcel bundles HTML+JS+TS here; output goes to ../build/dist/webapp/. Coexists with the legacy hand-copied webapp-src/ during the transition.",
+  "description": "Astro+Preact frontend for the Warsmash HTML5 port. Builds the public site (landing, multiplayer pages, engine page, asset manager) from src/. Output goes to ./dist via `npm run build`; the gradle :html:buildWebSrc task copies that into html/build/dist/webapp/. The TeaVM-compiled engine (engine-worker.js, app.js) is layered on top by other gradle tasks.",
   "scripts": {
-    "dev": "parcel serve multiplayer-test.html --port 8001",
-    "build:test": "parcel build multiplayer-test.html --dist-dir ../build/dist/webapp/ --public-url ./ --no-cache",
-    "build:bridge": "parcel build poki-bridge.ts --dist-dir ../build/dist/webapp/ --public-url ./ --no-cache --no-content-hash --no-source-maps",
-    "build": "npm run build:test && npm run build:bridge"
-  },
-  "targets": {
-    "default": {
-      "context": "browser"
-    }
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
   },
   "dependencies": {
-    "@poki/netlib": "0.0.18"
-  },
-  "devDependencies": {
-    "parcel": "^2.15.4"
+    "@astrojs/preact": "^4.0.10",
+    "@poki/netlib": "0.0.18",
+    "astro": "^5.0.0",
+    "mdx-m3-viewer": "^5.12.0",
+    "preact": "^10.24.3"
   }
 }

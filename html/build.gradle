@@ -59,23 +59,27 @@ task copyWebOverrides {
     }
 }
 
-// Bundle the parcel-built JS sources from web-src/ alongside the TeaVM
-// output. web-src/ houses anything that needs npm dependencies — currently
-// the @poki/netlib bridge (poki-bridge.js) and the standalone multiplayer
-// test page. Runs `npm install` lazily if node_modules is missing, then
-// `npm run build` which writes hashed JS files directly into
-// build/dist/webapp/. Skipped if web-src/ doesn't exist (so older clones
-// without it still build).
+// Build the Astro+Preact public site from web-src/. This produces the
+// landing page (index.html), the engine page (play/index.html), the
+// multiplayer pages (multiplayer/index.html), plus all the Preact
+// islands and the Poki Netlib bridge. Output lands in web-src/dist/
+// which we then layer over build/dist/webapp/. Skipped if web-src/
+// doesn't exist (so older clones without it still build).
+//
+// Astro replaces the previous parcel build — there's no longer a
+// hand-written index.html in webapp-src/ that ships to prod. The
+// worker bootstraps (engine-worker-boot.js, worker-boot.js) still
+// live in webapp-src/ since they're not @poki/netlib-dependent and
+// don't need a bundler; copyWebOverrides handles them.
 task buildWebSrc {
-    description = "Run parcel inside web-src/ to bundle npm-managed JS (poki bridge, multiplayer test page)."
+    description = "Run Astro inside web-src/ to build the public site (landing, /play, /multiplayer) and bundle the Poki Netlib bridge."
     onlyIf { file("web-src/package.json").exists() }
     inputs.file file("web-src/package.json")
-    inputs.dir file("web-src")
-    inputs.files fileTree("web-src") {
-        exclude "node_modules/**"
-        exclude ".parcel-cache/**"
-        exclude "dist/**"
-    }
+    inputs.file file("web-src/astro.config.mjs")
+    inputs.file file("web-src/tsconfig.json")
+    inputs.dir file("web-src/src")
+    inputs.dir file("web-src/public")
+
     doLast {
         def workDir = file("web-src")
         if (!file("web-src/node_modules").exists()) {
@@ -88,16 +92,28 @@ task buildWebSrc {
             workingDir workDir
             commandLine "npm", "run", "build"
         }
+        // Layer Astro's dist/ over the webapp output. Astro emits an
+        // index.html that supersedes the legacy webapp-src/index.html
+        // copied by copyWebOverrides — we depend on this task running
+        // AFTER copyWebOverrides for the overwrite to be the one the
+        // user sees in production. The TeaVM-built engine artefacts
+        // (app.js, engine-worker.js, assets/, etc.) live alongside
+        // Astro's pages and remain untouched.
+        copy {
+            from "web-src/dist"
+            into "build/dist/webapp"
+        }
     }
 }
 
 buildWeb.finalizedBy copyWebOverrides
 buildWeb.finalizedBy buildWorker
 buildWeb.finalizedBy buildEngineWorker
-// buildWebSrc runs AFTER copyWebOverrides so its hashed JS files aren't
-// overwritten by the (potentially stale) webapp-src/ copies. If we ever
-// move index.html under parcel too, this ordering matters even more.
 buildWeb.finalizedBy buildWebSrc
+// Strict ordering: Astro's index.html / play/index.html / multiplayer/
+// index.html must overwrite anything copyWebOverrides put down, so the
+// site behaves consistently regardless of finalizer-add order.
+buildWebSrc.mustRunAfter copyWebOverrides
 
 eclipse.project {
     name = appName + "-html"

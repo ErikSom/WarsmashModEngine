@@ -19,13 +19,23 @@ import { Network } from '@poki/netlib'
 
 interface BridgeCallbacks {
   ready?: (selfId: string) => void
-  lobby?: (code: string) => void
+  /** Fires when we enter a lobby (whether by `create()` or `join()`).
+   *  `leaderId` carries the lobby's current leader at join time —
+   *  netlib already knows it from the 'joined' packet, so this
+   *  spares consumers from racing the separate 'leader' event. */
+  lobby?: (code: string, leaderId: string) => void
   left?: () => void
   peerConnected?: (peerId: string) => void
   peerDisconnected?: (peerId: string, reason: string) => void
   leader?: (leaderId: string) => void
   message?: (peerId: string, channel: string, bytes: Uint8Array, isString: boolean, stringValue: string) => void
   error?: (kind: string, message: string) => void
+  /** Fires after a successful reconnect — netlib has restored our
+   *  saved peer id + secret with the signaling server. The 'ready'
+   *  callback does NOT fire on reconnect (the server short-circuits
+   *  it once receivedID is already set), so consumers that gate on
+   *  "are we connected?" must subscribe to this too. */
+  signalingreconnected?: (selfId: string) => void
 }
 
 // Lazy-resolved reference to the live Network instance. Init() returns
@@ -34,14 +44,15 @@ interface BridgeCallbacks {
 let net: Network | null = null
 
 const cb: Required<BridgeCallbacks> = {
-  ready:            () => {},
-  lobby:            () => {},
-  left:             () => {},
-  peerConnected:    () => {},
-  peerDisconnected: () => {},
-  leader:           () => {},
-  message:          () => {},
-  error:            () => {}
+  ready:                  () => {},
+  lobby:                  () => {},
+  left:                   () => {},
+  peerConnected:          () => {},
+  peerDisconnected:       () => {},
+  leader:                 () => {},
+  message:                () => {},
+  error:                  () => {},
+  signalingreconnected:   () => {}
 }
 
 function safe<T extends (...args: any[]) => unknown> (fn: T) {
@@ -69,19 +80,20 @@ function toUint8 (data: ArrayBuffer | ArrayBufferView): Uint8Array {
 // Construct the Network and install all listeners. Idempotent: a second
 // call closes the previous Network and starts fresh, so the menu can
 // re-host after a leave without reloading the page.
-function pokiBridgeInit (gameId: string, callbacks: BridgeCallbacks): boolean {
+export function pokiBridgeInit (gameId: string, callbacks: BridgeCallbacks): boolean {
   if (net != null) {
     try { net.close('reinit') } catch { /* ignore */ }
     net = null
   }
-  cb.ready            = callbacks.ready            ?? cb.ready
-  cb.lobby            = callbacks.lobby            ?? cb.lobby
-  cb.left             = callbacks.left             ?? cb.left
-  cb.peerConnected    = callbacks.peerConnected    ?? cb.peerConnected
-  cb.peerDisconnected = callbacks.peerDisconnected ?? cb.peerDisconnected
-  cb.leader           = callbacks.leader           ?? cb.leader
-  cb.message          = callbacks.message          ?? cb.message
-  cb.error            = callbacks.error            ?? cb.error
+  cb.ready                = callbacks.ready                ?? cb.ready
+  cb.lobby                = callbacks.lobby                ?? cb.lobby
+  cb.left                 = callbacks.left                 ?? cb.left
+  cb.peerConnected        = callbacks.peerConnected        ?? cb.peerConnected
+  cb.peerDisconnected     = callbacks.peerDisconnected     ?? cb.peerDisconnected
+  cb.leader               = callbacks.leader               ?? cb.leader
+  cb.message              = callbacks.message              ?? cb.message
+  cb.error                = callbacks.error                ?? cb.error
+  cb.signalingreconnected = callbacks.signalingreconnected ?? cb.signalingreconnected
 
   try {
     net = new Network(gameId)
@@ -90,15 +102,27 @@ function pokiBridgeInit (gameId: string, callbacks: BridgeCallbacks): boolean {
     return false
   }
 
-  net.on('ready',        () =>     safe(cb.ready)(net!.id))
-  net.on('lobby',        (code) => safe(cb.lobby)(code))
-  net.on('left',         () =>     safe(cb.left)())
-  net.on('connected',    (peer) => safe(cb.peerConnected)(peer.id))
-  net.on('disconnected', (peer) => safe(cb.peerDisconnected)(peer.id, 'disconnected'))
-  net.on('leader',       (id) =>   safe(cb.leader)(id))
-  net.on('failed',       () =>     safe(cb.error)('failed', 'network failed'))
-  net.on('rtcerror',     (e: any) => safe(cb.error)('rtcerror', String(e?.error?.message ?? e)))
-  net.on('signalingerror', (e) => safe(cb.error)('signalingerror', JSON.stringify(e)))
+  net.on('ready',                () =>     safe(cb.ready)(net!.id))
+  // signalingreconnected fires when netlib's auto-reconnect succeeds
+  // on a transient WebSocket drop within the same page session. The
+  // 'ready' event does NOT fire on reconnect (the server short-
+  // circuits welcome once it sees we already have an id), so the
+  // signalingreconnected hook is the right place for consumers to
+  // re-establish "we're connected" UI state.
+  //
+  // (Reconnect ACROSS a page reload would need persistence of
+  // signaling.receivedID/receivedSecret + a netlib API to inject
+  // them on construction. Both are netlib internals today; we'd
+  // upstream a public reconnect surface there before relying on it.)
+  net.on('signalingreconnected', () =>     safe(cb.signalingreconnected)(net!.id))
+  net.on('lobby',                (code, info) => safe(cb.lobby)(code, info?.leader ?? ''))
+  net.on('left',                 () =>     safe(cb.left)())
+  net.on('connected',            (peer) => safe(cb.peerConnected)(peer.id))
+  net.on('disconnected',         (peer) => safe(cb.peerDisconnected)(peer.id, 'disconnected'))
+  net.on('leader',               (id) =>   safe(cb.leader)(id))
+  net.on('failed',               () =>     safe(cb.error)('failed', 'network failed'))
+  net.on('rtcerror',             (e: any) => safe(cb.error)('rtcerror', String(e?.error?.message ?? e)))
+  net.on('signalingerror',       (e) =>    safe(cb.error)('signalingerror', JSON.stringify(e)))
 
   net.on('message', (peer, channel, data) => {
     // Binary path — typical for in-game traffic (the lockstep wire
@@ -131,9 +155,9 @@ function pokiBridgeInit (gameId: string, callbacks: BridgeCallbacks): boolean {
 
 // Create a new lobby. cbCode receives the lobby code; cbErr receives a
 // reason string on failure. Never throws.
-function pokiBridgeCreateLobby (cbCode: (code: string) => void, cbErr: (reason: string) => void): void {
+export function pokiBridgeCreateLobby (cbCode: (code: string) => void, cbErr: (reason: string) => void, settings?: object): void {
   if (net == null) { safe(cbErr)('not-initialized'); return }
-  net.create().then(code => {
+  net.create(settings as any).then(code => {
     if (code !== '') safe(cbCode)(code)
     else             safe(cbErr)('create-empty')
   }).catch((e: unknown) => safe(cbErr)(String((e as any)?.message ?? e)))
@@ -141,9 +165,9 @@ function pokiBridgeCreateLobby (cbCode: (code: string) => void, cbErr: (reason: 
 
 // Join an existing lobby by code. Fires cbInfo(code) on success or
 // cbErr(reason) on failure.
-function pokiBridgeJoinLobby (code: string, cbInfo: (code: string) => void, cbErr: (reason: string) => void): void {
+export function pokiBridgeJoinLobby (code: string, cbInfo: (code: string) => void, cbErr: (reason: string) => void, password?: string): void {
   if (net == null) { safe(cbErr)('not-initialized'); return }
-  net.join(code).then(info => {
+  net.join(code, password).then(info => {
     if (info != null) safe(cbInfo)(info.code ?? code)
     else              safe(cbErr)('join-not-found-or-full')
   }).catch((e: unknown) => safe(cbErr)(String((e as any)?.message ?? e)))
@@ -151,7 +175,7 @@ function pokiBridgeJoinLobby (code: string, cbInfo: (code: string) => void, cbEr
 
 // Leave the current lobby. Fire-and-forget; the 'left' callback fires
 // when the server confirms.
-function pokiBridgeLeaveLobby (): void {
+export function pokiBridgeLeaveLobby (): void {
   if (net == null) return
   net.leave().catch((e: unknown) => safe(cb.error)('leave', String((e as any)?.message ?? e)))
 }
@@ -159,7 +183,7 @@ function pokiBridgeLeaveLobby (): void {
 // Send raw bytes to a specific peer over the named channel. Java passes
 // an Int8Array; we reinterpret as Uint8Array so RTCDataChannel.send sees
 // the right magnitude per byte.
-function pokiBridgeSendBytesTo (peerId: string, channel: string, int8: Int8Array): void {
+export function pokiBridgeSendBytesTo (peerId: string, channel: string, int8: Int8Array): void {
   if (net == null) return
   const u8 = new Uint8Array(int8.buffer, int8.byteOffset, int8.byteLength)
   // Pass the underlying ArrayBuffer slice so the receiver's byteLength
@@ -172,7 +196,7 @@ function pokiBridgeSendBytesTo (peerId: string, channel: string, int8: Int8Array
 
 // Broadcast raw bytes to all connected peers over the named channel.
 // Same magnitude-conversion notes as sendBytesTo.
-function pokiBridgeBroadcastBytes (channel: string, int8: Int8Array): void {
+export function pokiBridgeBroadcastBytes (channel: string, int8: Int8Array): void {
   if (net == null) return
   const u8 = new Uint8Array(int8.buffer, int8.byteOffset, int8.byteLength)
   const buf = (u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength)
@@ -181,22 +205,77 @@ function pokiBridgeBroadcastBytes (channel: string, int8: Int8Array): void {
   net.broadcast(channel, buf)
 }
 
+// Send a UTF-8 string to a specific peer over the named channel. Used
+// for JSON control messages (player name / map picks / start handshake)
+// during the lobby phase. Engine traffic uses sendBytesTo.
+export function pokiBridgeSendStringTo (peerId: string, channel: string, str: string): void {
+  if (net == null) return
+  net.send(channel, peerId, str)
+}
+
+// Broadcast a UTF-8 string to all connected peers.
+export function pokiBridgeBroadcastString (channel: string, str: string): void {
+  if (net == null) return
+  net.broadcast(channel, str)
+}
+
+// Update lobby settings (mutable on the host side via the netlib API).
+// Used to publish the host's chosen map / lobby name / max players.
+export function pokiBridgeSetLobbySettings (settings: object, cbOk?: () => void, cbErr?: (reason: string) => void): void {
+  if (net == null) { cbErr?.('not-initialized'); return }
+  net.setLobbySettings(settings as any).then(res => {
+    if (res === true) cbOk?.()
+    else              cbErr?.(res instanceof Error ? res.message : String(res))
+  }).catch((e: unknown) => cbErr?.(String((e as any)?.message ?? e)))
+}
+
+export interface PublicLobbyEntry {
+  code: string
+  playerCount: number
+  maxPlayers: number
+  hasPassword: boolean
+  customData?: { [key: string]: any }
+  leader?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// List public lobbies. Returns an empty array if not connected.
+export function pokiBridgeListLobbies (cbOk: (entries: PublicLobbyEntry[]) => void, cbErr: (reason: string) => void): void {
+  if (net == null) { cbErr('not-initialized'); return }
+  net.list().then(entries => {
+    cbOk(entries.map(e => ({
+      code: e.code,
+      playerCount: e.playerCount,
+      maxPlayers: e.maxPlayers,
+      hasPassword: e.hasPassword,
+      customData: e.customData,
+      leader: e.leader,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+    })))
+  }).catch((e: unknown) => cbErr(String((e as any)?.message ?? e)))
+}
+
 // Read-only state accessors — Java polls these instead of holding a
 // reference to the Network object directly (cleaner @JSBody surface).
-function pokiBridgeSelfId (): string         { return net?.id ?? '' }
-function pokiBridgeCurrentLobby (): string   { return net?.currentLobby ?? '' }
-function pokiBridgeCurrentLeader (): string  { return net?.currentLeader ?? '' }
-function pokiBridgePeerCount (): number      { return net?.size ?? 0 }
-function pokiBridgePeerIds (): string[] {
+export function pokiBridgeSelfId (): string         { return net?.id ?? '' }
+export function pokiBridgeCurrentLobby (): string   { return net?.currentLobby ?? '' }
+export function pokiBridgeCurrentLeader (): string  { return net?.currentLeader ?? '' }
+export function pokiBridgePeerCount (): number      { return net?.size ?? 0 }
+export function pokiBridgePeerIds (): string[] {
   if (net == null) return []
   const ids: string[] = []
   net.peers.forEach((_peer, id) => ids.push(id))
   return ids
 }
+/** True iff a Network instance has been constructed. Doesn't imply
+ *  signaling-ready — pair with the 'ready' callback for that. */
+export function pokiBridgeReady (): boolean { return net != null }
 
 // Tear down the Network (closes signaling + all peer connections).
 // Survivable: pokiBridgeInit() can be called again afterward.
-function pokiBridgeClose (): void {
+export function pokiBridgeClose (): void {
   if (net == null) return
   try { net.close('shutdown') } catch { /* ignore */ }
   net = null
@@ -208,6 +287,13 @@ function pokiBridgeClose (): void {
 // path of least resistance for the @JSBody single-line script bodies.
 // ----------------------------------------------------------------------
 
+// New code in the web-src/ codebase imports the functions directly,
+// but we still install globals for two reasons:
+//   1. TeaVM's PokiNetlibBridge.java @JSBody calls reach for them.
+//   2. The persistent <script> in Layout.astro can warm up the bridge
+//      from a vanilla <script> tag (Astro view-transitions inline a
+//      separate <script> for hydration, but a static script tag with
+//      transition:persist runs once and stays alive across navs).
 const target: any = (typeof globalThis !== 'undefined') ? globalThis : self
 target.pokiBridgeInit            = pokiBridgeInit
 target.pokiBridgeCreateLobby     = pokiBridgeCreateLobby
@@ -220,4 +306,9 @@ target.pokiBridgeCurrentLobby    = pokiBridgeCurrentLobby
 target.pokiBridgeCurrentLeader   = pokiBridgeCurrentLeader
 target.pokiBridgePeerCount       = pokiBridgePeerCount
 target.pokiBridgePeerIds         = pokiBridgePeerIds
+target.pokiBridgeSendStringTo    = pokiBridgeSendStringTo
+target.pokiBridgeBroadcastString = pokiBridgeBroadcastString
+target.pokiBridgeSetLobbySettings = pokiBridgeSetLobbySettings
+target.pokiBridgeListLobbies     = pokiBridgeListLobbies
+target.pokiBridgeReady           = pokiBridgeReady
 target.pokiBridgeClose           = pokiBridgeClose

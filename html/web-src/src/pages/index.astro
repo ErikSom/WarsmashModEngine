@@ -1,0 +1,113 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { VERSION } from '../lib/version';
+---
+<Layout title="Warsmash">
+  <main class="landing">
+    <header class="landing-header">
+      <h1>Warsmash</h1>
+      <p class="subtitle">Warcraft III in your browser.</p>
+    </header>
+
+    <ul class="landing-tiles">
+      <li>
+        <a href="./play/" class="landing-tile">
+          <div class="landing-tile-title">Play</div>
+          <div class="landing-tile-desc">
+            Boot the engine straight into the main menu. Single-player or
+            campaign. Your Warcraft III install needs to be staged first.
+          </div>
+        </a>
+      </li>
+      <li>
+        <a href="./multiplayer/" class="landing-tile">
+          <div class="landing-tile-title">Multiplayer</div>
+          <div class="landing-tile-desc">
+            Browse public lobbies, host your own, or join by code.
+            Lockstep WebRTC peer-to-peer; no server install required.
+          </div>
+        </a>
+      </li>
+      <li>
+        <a href="./assets/" class="landing-tile">
+          <div class="landing-tile-title">Manage assets</div>
+          <div class="landing-tile-desc">
+            Upload your Warcraft III install + manage maps in private
+            browser storage (OPFS). Updates carry across visits.
+          </div>
+        </a>
+      </li>
+    </ul>
+
+    <footer class="landing-footer">
+      <span>v{VERSION}</span>
+      <span>·</span>
+      <a href="https://github.com/Retera/WarsmashModEngine" target="_blank" rel="noopener noreferrer">github</a>
+    </footer>
+  </main>
+</Layout>
+
+<style>
+  .landing {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 64px 24px;
+  }
+  .landing-header {
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .landing-header h1 {
+    margin: 0 0 6px;
+    font-size: 40px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+  .landing-header .subtitle {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 15px;
+  }
+  .landing-tiles {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 14px;
+  }
+  .landing-tile {
+    display: block;
+    padding: 18px 22px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: var(--text);
+    transition: background 0.1s, border-color 0.1s, transform 0.1s;
+  }
+  .landing-tile:hover {
+    background: var(--bg-elevated-2);
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+  .landing-tile-title {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .landing-tile-desc {
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .landing-footer {
+    margin-top: 48px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+  }
+</style>

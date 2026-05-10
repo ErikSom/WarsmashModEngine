@@ -1,0 +1,60 @@
+---
+/**
+ * Splash overlay shown from "Play game" click until the engine reports
+ * setScreen(WarsmashGdxMenuScreen) — bridges the few seconds of black
+ * screen during worker boot, MPQ open, GameUI/MenuUI construction.
+ *
+ * Visibility is driven imperatively from EnginePage (`document.getElementById('splash').style.display = ...`)
+ * so engine-boot callbacks can hide it without poking at the Preact tree.
+ */
+import { versionedAsset } from '../lib/version';
+const splashImgUrl = versionedAsset('goblin-tinker.webp');
+---
+<div id="splash">
+  <img id="splash-img" alt="" src={splashImgUrl} />
+  <div class="label">Initializing</div>
+</div>
+
+<style>
+  #splash {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: #000;
+  }
+  #splash img {
+    max-width: 60vw;
+    max-height: 60vh;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  #splash .label {
+    color: #c8d8f1;
+    font-size: 16px;
+    letter-spacing: 0.5px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  /* Animated ellipsis appended after "Initializing". 3-step keyframe
+     so the dots cycle 1 → 2 → 3 → 1 on a 1.2s loop. */
+  #splash .label::after {
+    content: '';
+    display: inline-block;
+    width: 1.5em;
+    text-align: left;
+    animation: splash-dots 1.2s steps(4, end) infinite;
+  }
+  @keyframes splash-dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
+</style>

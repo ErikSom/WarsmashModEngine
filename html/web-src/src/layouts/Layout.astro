@@ -1,0 +1,51 @@
+---
+// Shared shell for every page. Holds the global stylesheet + the
+// persistent islands that need to survive page navigation (Poki bridge,
+// engine worker handle). Pages opt into Astro view-transitions by
+// rendering <ClientRouter /> inside <head>; persistent components are
+// marked with `transition:persist` so the WebRTC mesh and engine
+// process aren't torn down between routes.
+//
+// Phase 1 intentionally keeps this minimal — just title/meta + a slot.
+// Phase 2 wires in <ClientRouter />, the persistent <PokiBridge /> and
+// <EngineWorker /> islands, and a topbar layout.
+import '../styles/global.css';
+import { ClientRouter } from 'astro:transitions';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Class string applied to <body>. Used by /play to opt into the
+   *  full-bleed engine layout (no scrolling, no text selection). */
+  bodyClass?: string;
+  /** Disables the right-click context menu. The /play page wants this
+   *  because the engine binds right-click for unit commands. */
+  blockContextMenu?: boolean;
+}
+
+const {
+  title = 'Warsmash',
+  description = 'Warcraft III in your browser',
+  bodyClass = '',
+  blockContextMenu = false,
+} = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content={description} />
+    <link rel="icon" href="data:," />
+    <title>{title}</title>
+
+    <!-- Astro view-transitions. Soft-nav between pages so the WebRTC
+         mesh + engine worker survive trips like /multiplayer/:code →
+         /play. Without this the lobby connection would die on every
+         link click and we'd have to rebuild it. -->
+    <ClientRouter />
+  </head>
+  <body class={bodyClass} oncontextmenu={blockContextMenu ? 'return false;' : undefined}>
+    <slot />
+  </body>
+</html>

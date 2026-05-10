@@ -1,0 +1,21 @@
+---
+/**
+ * /multiplayer — entry point for the multiplayer flow.
+ *
+ * Single page that conditionally renders:
+ *   - Name capture form (first-visit / no localStorage name)
+ *   - Lobby browser    (default)
+ *   - Lobby room       (?lobby=ABC123 in URL or after joining)
+ *
+ * The single-page-with-soft-routing approach keeps the Poki bridge +
+ * WebRTC mesh alive while the user moves between views — full Astro
+ * page nav would require <ClientRouter /> + transition:persist on the
+ * bridge to survive, which we'll wire in Phase 5 once the rest of the
+ * site is on Astro.
+ */
+import Layout from '../../layouts/Layout.astro';
+import Multiplayer from '../../components/Multiplayer';
+---
+<Layout title="Multiplayer · Warsmash">
+  <Multiplayer client:load />
+</Layout>

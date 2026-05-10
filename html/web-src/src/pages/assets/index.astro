@@ -1,0 +1,19 @@
+---
+/**
+ * /assets — dedicated WC3 install + maps management page.
+ *
+ * NOTE on the path collision: the TeaVM build outputs its engine
+ * resources directly into webapp/assets/ (preload.txt, warsmash.ini,
+ * Scripts/, UI/, etc.). This page lives at webapp/assets/index.html,
+ * so a request for /assets/ serves THIS page and a request for
+ * /assets/preload.txt serves the engine resource. Both coexist.
+ *
+ * The link from the landing page uses an explicit trailing slash
+ * (./assets/) so no static server treats it as a directory listing.
+ */
+import Layout from '../../layouts/Layout.astro';
+import AssetsPage from '../../components/AssetsPage';
+---
+<Layout title="Manage assets · Warsmash">
+  <AssetsPage client:load />
+</Layout>

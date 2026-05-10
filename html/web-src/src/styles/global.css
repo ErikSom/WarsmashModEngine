@@ -1,0 +1,1358 @@
+/* Warsmash global styles — dark, minimal, monospace-leaning to match
+   the Warcraft III aesthetic without going full skeuomorphic. */
+
+:root {
+  --bg: #0e1116;
+  --bg-elevated: #1a1f29;
+  --bg-elevated-2: #232936;
+  --border: #2d3441;
+  --text: #d8dde6;
+  --text-dim: #8b94a3;
+  --text-muted: #5e6675;
+  --accent: #5fb3d6;
+  --accent-hover: #7ec5e3;
+  --warning: #ffd66b;
+  --error: #e26464;
+  --success: #7ad48b;
+
+  --radius: 6px;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overscroll-behavior: none;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+button, .btn, label.fakebtn {
+  font: inherit;
+  background: var(--bg-elevated-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+button:hover:not(:disabled), .btn:hover:not(:disabled), label.fakebtn:hover {
+  background: #2d3441;
+  border-color: #3d4451;
+}
+button:disabled, .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.primary, .btn.primary, label.fakebtn.primary {
+  background: #2a4a7a;
+  border-color: #3a5a8a;
+}
+button.primary:hover:not(:disabled), .btn.primary:hover:not(:disabled), label.fakebtn.primary:hover {
+  background: #3a5a8a;
+}
+button.secondary, .btn.secondary, label.fakebtn.secondary {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+button.danger, .btn.danger {
+  background: #5a3a3a;
+  border-color: #6a4a4a;
+}
+
+input[type="text"], input[type="password"] {
+  font: inherit;
+  font-family: var(--font-mono);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+input[type="text"]:focus, input[type="password"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ==================================================================
+   /play page — engine canvas, asset overlay, splash sit in here.
+   ================================================================== */
+
+body.engine-page {
+  /* Engine page is full-bleed: hide scroll, no text selection (the
+     engine takes over), prevent context menu via inline. */
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#canvas-wrap {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: #000 url('/bg.png') center/cover no-repeat;
+  touch-action: none;
+}
+#canvas {
+  border: none;
+  display: block;
+  /* Cap to the engine's internal 4:3 layout. WarsmashGdxMenuScreen
+     centers a 4:3 viewport inside whatever canvas it's given; if the
+     canvas itself is 4:3 the menu fills it edge-to-edge with no
+     ugly off-center 3D backdrop. */
+  width:  min(100vw, calc(100vh * 4 / 3));
+  height: min(100vh, calc(100vw * 3 / 4));
+  touch-action: none;
+  cursor: none; /* engine draws its own from Cursor.png */
+}
+
+/* The boot overlay sits over the canvas and is the only thing the user
+   sees before the engine starts rendering. Now styled to match the
+   /multiplayer pages — single centered card on the page background,
+   no radial gradient, normal buttons. */
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  gap: 0;
+  z-index: 50;
+  overflow: auto;
+}
+.boot-overlay-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 28px 32px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.boot-overlay h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.boot-overlay p {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.55;
+  font-size: 14px;
+}
+.boot-overlay code {
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.boot-overlay .row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.boot-overlay .progress {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  height: 8px;
+}
+.boot-overlay .progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 100ms;
+}
+.boot-overlay .boot-summary {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.boot-overlay .boot-status {
+  color: var(--text-dim);
+  font-size: 13px;
+  min-height: 18px;
+  font-family: var(--font-mono);
+}
+.boot-overlay .boot-error {
+  color: var(--error);
+  font-size: 13px;
+  background: rgba(226, 100, 100, 0.08);
+  border: 1px solid rgba(226, 100, 100, 0.3);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.boot-overlay-back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  z-index: 60;
+}
+.boot-overlay-back:hover { color: var(--text); }
+
+/* ==================================================================
+   Modals — shared backdrop + panel base for MapsManager + Changelog.
+   ================================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.maps-panel,
+.changelog-panel {
+  background: #1a2233;
+  border: 1px solid #2a3a52;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.maps-header,
+.changelog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #2a3a52;
+}
+.maps-title,
+.changelog-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+.maps-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #2a3a52;
+}
+.maps-info {
+  color: #99a8c2;
+  font-size: 13px;
+}
+.maps-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 18px;
+  min-height: 100px;
+}
+.maps-list .group-header {
+  color: #c8d8f1;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 10px 0 6px;
+}
+.maps-list .group-header:first-child { margin-top: 0; }
+.maps-list .row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  background: #20293c;
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+.maps-list .name {
+  color: #ddd;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.maps-list .path {
+  color: #6a7a93;
+  font-size: 11px;
+  margin-left: 8px;
+}
+.maps-list .row-remove {
+  background: #5a2828;
+  border-color: #6a3838;
+  color: white;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+.maps-list .empty {
+  color: #777;
+  text-align: center;
+  padding: 30px 10px;
+}
+.maps-error {
+  color: #f66;
+  font-size: 13px;
+  padding: 0 18px 14px;
+}
+
+.changelog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 22px;
+  line-height: 1.55;
+  color: #cfd8e6;
+  font-size: 14px;
+}
+.changelog-body h1 { font-size: 18px; color: #eee; margin: 0 0 12px; }
+.changelog-body h2 { font-size: 15px; color: #c8d8f1; margin: 18px 0 6px; }
+.changelog-body p  { margin: 0 0 10px; color: #aab2c2; }
+.changelog-body ul { margin: 0 0 14px; padding-left: 22px; }
+.changelog-body li { margin: 3px 0; }
+.changelog-body code {
+  background: #283146;
+  color: #d8e8ff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* ==================================================================
+   Version chip (bottom-right of /play).
+   ================================================================== */
+
+.version-chip {
+  position: fixed;
+  bottom: 8px;
+  right: 12px;
+  color: #888;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  user-select: none;
+  z-index: 50;
+  cursor: pointer;
+  text-decoration: underline dotted #555;
+  text-underline-offset: 3px;
+}
+.version-chip:hover { color: #c8d8f1; }
+
+/* ==================================================================
+   Desync overlay — full-screen blocking modal.
+   ================================================================== */
+
+.desync-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(10, 12, 18, 0.96);
+  color: #d8dde6;
+  font-family: system-ui, sans-serif;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow: auto;
+}
+.desync-panel {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.desync-panel h2 {
+  color: #f88;
+  margin: 0 0 4px 0;
+}
+.desync-panel p {
+  color: #aac;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+.desync-buttons {
+  margin-bottom: 8px;
+}
+.desync-buttons button {
+  margin-right: 8px;
+  font-size: 13px;
+  padding: 8px 14px;
+}
+.desync-copy-status {
+  color: #8c8;
+  margin-left: 10px;
+  font-size: 12px;
+}
+.desync-textarea {
+  width: 100%;
+  height: 60vh;
+  background: #11141a;
+  color: #cdd;
+  border: 1px solid #4a5366;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  box-sizing: border-box;
+  white-space: pre;
+  overflow: auto;
+}
+
+/* ==================================================================
+   /multiplayer — lobby browser, lobby room, name capture.
+   ================================================================== */
+
+.multiplayer-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.mp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.mp-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+}
+.mp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mp-name {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.mp-name strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.link-btn {
+  background: transparent;
+  border: none;
+  padding: 0 0 0 6px;
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--accent-hover);
+  background: transparent;
+}
+a.btn {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.mp-status-banner {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--warning);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.mp-section {
+  margin-bottom: 28px;
+  padding: 18px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.mp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.mp-section-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+.mp-section-hint {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.mp-error {
+  margin-top: 12px;
+  color: var(--error);
+  font-size: 13px;
+}
+.mp-warn {
+  color: var(--warning);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.mp-join-form {
+  display: flex;
+  gap: 8px;
+}
+.mp-join-form input[type="text"] {
+  flex: 1;
+}
+
+.mp-refresh {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.mp-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 8px 0;
+}
+
+.mp-lobbies {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mp-lobby-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.mp-lobby-main {
+  flex: 1;
+  min-width: 0;
+}
+.mp-lobby-line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.mp-lobby-map {
+  font-weight: 500;
+  color: var(--text);
+}
+.mp-lobby-host {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.mp-lobby-line2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.mp-lobby-code {
+  background: var(--bg);
+  color: var(--warning);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+.mp-lobby-count {
+  color: var(--text-dim);
+}
+.mp-lobby-age {
+  color: var(--text-muted);
+}
+
+/* In-lobby code chip — bigger, click-to-copy. */
+.mp-lobby-code-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mp-lobby-code-big {
+  background: #2a4a7a;
+  color: var(--warning);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: all;
+  transition: background 0.1s;
+}
+.mp-lobby-code-big:hover { background: #3a5a8a; }
+.mp-lobby-code-big.copied { background: #3a6a3a; }
+.mp-copied {
+  color: var(--success);
+  font-size: 12px;
+}
+
+.mp-players {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mp-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-elevated-2);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+.mp-player.is-host {
+  border-left: 3px solid var(--warning);
+}
+.mp-player-name {
+  flex: 1;
+  color: var(--text);
+}
+.mp-player-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.mp-player-tag.mp-player-self {
+  background: #2a4a7a;
+  color: white;
+}
+.mp-player.is-host .mp-player-tag:not(.mp-player-self) {
+  background: var(--warning);
+  color: #2a2110;
+  font-weight: 500;
+}
+
+/* Map readout — shown above the Slots section. Three columns:
+   thumbnail preview on the left, main block (name + author +
+   recommended) in the middle, meta column (player count + tileset)
+   on the right. The preview is hidden when no preview/minimap
+   could be extracted from the map's MPQ. */
+.mp-map-readout {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.mp-map-preview {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #000;
+  flex-shrink: 0;
+  /* WC3's tiny preview/minimap textures are nearest-neighbor friendly. */
+  image-rendering: pixelated;
+}
+.mp-map-readout-main {
+  flex: 1;
+  min-width: 0;
+}
+.mp-map-readout-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.mp-map-readout-author {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.mp-map-readout-recommended {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 2px;
+}
+.mp-map-readout-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 12px;
+}
+.mp-map-players {
+  color: var(--text-dim);
+}
+.mp-map-tileset {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.mp-map-description {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Slot list — each slot is a card with two stacked rows:
+     row 1: # + color dot + name + tags + actions
+     row 2: race / color / team / handicap pickers (auto-fit grid)
+   This avoids the cramped single-row layout where dropdowns elbow
+   the player name + tags off-screen on narrow viewports. */
+.mp-slots {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mp-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-elevated-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 13px;
+  transition: background 0.1s, border-color 0.1s;
+}
+.mp-slot.is-host {
+  border-left: 3px solid var(--warning);
+}
+.mp-slot.is-self {
+  border-color: #3a5a8a;
+}
+.mp-slot.is-open {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+.mp-slot.is-closed {
+  background: rgba(40, 30, 30, 0.4);
+  border: 1px dashed #553a3a;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+/* Computer-typed slots in fixed-settings UMS maps: dim, no claim,
+   pickers locked. Visually subordinate to host/self/closed. */
+.mp-slot.is-computer {
+  background: rgba(20, 25, 35, 0.5);
+  border: 1px solid var(--border);
+  opacity: 0.9;
+}
+.mp-slot.is-computer .mp-slot-empty {
+  font-style: normal;
+  color: var(--text-dim);
+}
+
+/* Force grouping: each force gets a header label above its slot
+   list. Multiple force groups stack vertically. */
+.mp-force-group {
+  margin-bottom: 14px;
+}
+.mp-force-group:last-child {
+  margin-bottom: 0;
+}
+.mp-force-header {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--warning);
+  font-weight: 500;
+  margin: 0 0 6px 4px;
+}
+
+/* Row 1 — identity + tags + actions. Identity flex-grows to fill
+   the middle; tags + actions hug the right. */
+.mp-slot-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mp-slot-num {
+  width: 22px;
+  text-align: center;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.mp-slot-color-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+.mp-slot-color-dot-open {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+}
+.mp-slot-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+}
+.mp-slot-name {
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.mp-slot-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.mp-slot-mapname {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mp-slot-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.mp-slot-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Row 2 — picker row. Race + color + handicap on a single line;
+   the color is a clickable cube (palette opens on click) instead
+   of a wide select. Wraps gracefully on narrow viewports. */
+.mp-slot-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-left: 30px;  /* align with identity column above */
+}
+.mp-slot-select {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 8px;
+  font-size: 12px;
+  min-width: 0;
+  cursor: pointer;
+  flex: 1 1 110px;
+  max-width: 180px;
+}
+.mp-slot-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mp-slot-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.mp-slot-select-placeholder {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  text-align: center;
+}
+
+/* Color picker — the cube replaces a long Color dropdown. The
+   trigger is a 26×26 colored square; clicking it opens a 4×3 grid
+   of swatches just below. The palette is absolutely positioned so
+   it doesn't push siblings around. */
+.mp-color-pick {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.mp-color-cube {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: transform 0.05s, box-shadow 0.1s;
+}
+.mp-color-cube:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.mp-color-cube:disabled {
+  cursor: not-allowed;
+}
+.mp-color-cube-trigger {
+  /* The trigger gets a small indicator that it's interactive. */
+}
+.mp-color-cube-trigger:disabled {
+  /* Locked slot — keep showing the color but don't suggest clicking. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  opacity: 0.7;
+}
+.mp-color-palette {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(4, 26px);
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.mp-color-palette .mp-color-cube.is-current {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.mp-color-palette .mp-color-cube.is-taken {
+  opacity: 0.25;
+  cursor: not-allowed;
+  /* Strikethrough overlay so it's obvious the swatch is in use. */
+  position: relative;
+}
+.mp-color-palette .mp-color-cube.is-taken::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 45%, rgba(0,0,0,0.6) 47%, rgba(0,0,0,0.6) 53%, transparent 55%);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.mp-slot-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.mp-slot.is-host .mp-slot-tag:not(.mp-slot-tag-self) {
+  background: var(--warning);
+  color: #2a2110;
+  font-weight: 500;
+}
+.mp-slot-tag-self {
+  background: #2a4a7a !important;
+  color: white !important;
+}
+.mp-slot-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mp-slot-claim {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.mp-slot-toggle {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.mp-slot-toggle:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.mp-slot-kick {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mp-slot-kick:hover:not(:disabled) {
+  background: #5a3a3a;
+  border-color: #6a4a4a;
+  color: white;
+}
+
+/* Map picker modal — wider than other modals to accommodate paths. */
+.map-picker-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 640px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+.map-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.map-picker-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+.map-picker-search {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.map-picker-search input {
+  width: 100%;
+  font-size: 14px;
+}
+.map-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  min-height: 200px;
+  max-height: 60vh;
+}
+.map-picker-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 30px 10px;
+  font-style: italic;
+}
+.map-picker-error {
+  color: var(--error);
+  padding: 16px;
+}
+.map-picker-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.map-picker-row:hover {
+  background: var(--bg-elevated-2);
+  border-color: var(--border);
+}
+.map-picker-row.is-selected {
+  background: #1f2a3f;
+  border-color: var(--accent);
+}
+.map-picker-row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-picker-row-tag {
+  background: #2a4a7a;
+  color: white;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.map-picker-row-tag-err {
+  background: var(--error);
+  color: #2a1010;
+}
+.map-picker-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+}
+.map-picker-row-author {
+  color: var(--text-dim);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.map-picker-row-path {
+  font-family: var(--font-mono);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.map-picker-row-players { color: var(--text-dim); }
+
+/* Confirm modal — generic 3-button "are you sure?" dialog. */
+.confirm-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 440px;
+  padding: 22px 26px;
+  box-shadow: var(--shadow);
+}
+.confirm-title {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.confirm-body {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.confirm-body p { margin: 0 0 10px; }
+.confirm-name-list {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--text);
+  font-size: 13px;
+}
+.confirm-name-list li { margin: 2px 0; }
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mp-start-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+}
+.mp-start-btn {
+  font-size: 16px;
+  padding: 12px 32px;
+  min-width: 240px;
+}
+
+/* ==================================================================
+   Name form (modal + inline).
+   ================================================================== */
+
+.name-form {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 26px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.name-form h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+.name-form p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.name-form input[type="text"] {
+  font-size: 16px;
+  padding: 10px 14px;
+}
+.name-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ==================================================================
+   Mobile portrait — tighten padding, wrap headers, drop the slot
+   picker grid to fewer columns on narrow viewports.
+   ================================================================== */
+
+@media (max-width: 600px) {
+  .multiplayer-page {
+    padding: 20px 14px 48px;
+  }
+  .mp-section {
+    padding: 14px 14px;
+  }
+  .mp-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+  }
+  .mp-header h1 {
+    font-size: 22px;
+    flex: 1;
+  }
+  .mp-section-header h2 {
+    font-size: 14px;
+  }
+
+  /* Slot card: tighten padding + label-less first-row layout. */
+  .mp-slot {
+    padding: 10px 10px;
+  }
+  .mp-slot-pickers {
+    /* Indent that aligned with the desktop "identity" column makes
+       the pickers feel detached on narrow phones — ditch it. */
+    padding-left: 0;
+    /* Two columns at most on phones — 4 narrow dropdowns is a worse
+       read than 2 reasonable ones across two rows. */
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Lobby code chip: smaller on mobile or it pushes the header past
+     the viewport edge. */
+  .mp-lobby-code-big {
+    font-size: 15px;
+    padding: 5px 10px;
+  }
+
+  /* Map readout: stack the meta column under main on phones. */
+  .mp-map-readout {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mp-map-readout-meta {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Lobby cards in the browser. */
+  .mp-lobby-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .mp-lobby-card button {
+    width: 100%;
+  }
+
+  /* Boot overlay (engine page) padding. */
+  .boot-overlay-card {
+    padding: 22px 18px;
+  }
+
+  /* Landing tiles. */
+  .landing {
+    padding: 36px 14px;
+  }
+  .landing-header h1 {
+    font-size: 32px;
+  }
+}
+
+/* Very narrow / older phones — collapse picker grid to a single
+   column so dropdown labels stay readable. */
+@media (max-width: 360px) {
+  .mp-slot-pickers {
+    grid-template-columns: 1fr;
+  }
+}

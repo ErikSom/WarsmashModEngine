@@ -143,7 +143,9 @@ Thumbs.db
 /core/data
 /core/assets/Logs
 
-## html/web-src — npm/parcel build inputs (sources committed, derived skipped)
+## html/web-src — Astro build inputs (sources committed, derived skipped)
 html/web-src/node_modules/
-html/web-src/.parcel-cache/
+html/web-src/.astro/
 html/web-src/dist/
+## Legacy parcel cache (no longer produced; left here for older clones)
+html/web-src/.parcel-cache/
