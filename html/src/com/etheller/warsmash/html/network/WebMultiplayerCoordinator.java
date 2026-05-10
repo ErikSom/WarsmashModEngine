@@ -10,6 +10,7 @@ import org.teavm.jso.core.JSString;
 import com.badlogic.gdx.utils.IntIntMap;
 import com.etheller.warsmash.WarsmashGdxMenuScreen;
 import com.etheller.warsmash.WarsmashGdxMultiScreenGame;
+import com.etheller.warsmash.networking.MultiplayerLobbyConfig;
 import com.etheller.warsmash.networking.WarsmashClientParser;
 import com.etheller.warsmash.networking.WarsmashServer;
 import com.etheller.warsmash.networking.WarsmashServerParser;
@@ -167,7 +168,8 @@ public final class WebMultiplayerCoordinator {
 				0,                          // unused on web
 				parseInt(params.getMySlot()),
 				serverSlotToMapSlot,
-				mapSlotToServerSlot);
+				mapSlotToServerSlot,
+				lobbyConfigFromParams(params));
 	}
 
 	private void doStartAsJoiner(final EngineStartParams params) {
@@ -198,7 +200,46 @@ public final class WebMultiplayerCoordinator {
 				0,
 				parseInt(params.getMySlot()),
 				serverSlotToMapSlot,
-				mapSlotToServerSlot);
+				mapSlotToServerSlot,
+				lobbyConfigFromParams(params));
+	}
+
+	/** Build a {@link MultiplayerLobbyConfig} from the parallel slot-config
+	 *  arrays in the postMessage payload. Each array is parallel: index i
+	 *  describes the same slot across all six. Empty/missing arrays just
+	 *  produce an empty MultiplayerLobbyConfig — the engine then falls
+	 *  through to map defaults. */
+	private static MultiplayerLobbyConfig lobbyConfigFromParams(final EngineStartParams params) {
+		final IntIntMap types     = new IntIntMap();
+		final IntIntMap races     = new IntIntMap();
+		final IntIntMap colors    = new IntIntMap();
+		final IntIntMap teams     = new IntIntMap();
+		final IntIntMap handicaps = new IntIntMap();
+		final boolean fps = "true".equals(jsStrOrEmpty(params.getFixedPlayerSettings()));
+		final JSArray<JSString> idxArr = params.getSlotConfigIndexes();
+		if (idxArr == null) {
+			return new MultiplayerLobbyConfig(types, races, colors, teams, handicaps, fps);
+		}
+		final JSArray<JSString> typeArr  = params.getSlotConfigTypes();
+		final JSArray<JSString> raceArr  = params.getSlotConfigRaces();
+		final JSArray<JSString> colorArr = params.getSlotConfigColors();
+		final JSArray<JSString> teamArr  = params.getSlotConfigTeams();
+		final JSArray<JSString> handArr  = params.getSlotConfigHandicaps();
+		final int n = idxArr.getLength();
+		for (int i = 0; i < n; i++) {
+			final int slotIdx = parseInt(idxArr.get(i));
+			if (typeArr != null && i < typeArr.getLength()) {
+				final String t = jsStrOrEmpty(typeArr.get(i));
+				types.put(slotIdx, "closed".equals(t)
+						? MultiplayerLobbyConfig.SLOT_TYPE_CLOSED
+						: MultiplayerLobbyConfig.SLOT_TYPE_OPEN);
+			}
+			if (raceArr  != null && i < raceArr.getLength())  races.put(slotIdx, parseInt(raceArr.get(i)));
+			if (colorArr != null && i < colorArr.getLength()) colors.put(slotIdx, parseInt(colorArr.get(i)));
+			if (teamArr  != null && i < teamArr.getLength())  teams.put(slotIdx, parseInt(teamArr.get(i)));
+			if (handArr  != null && i < handArr.getLength())  handicaps.put(slotIdx, parseInt(handArr.get(i)));
+		}
+		return new MultiplayerLobbyConfig(types, races, colors, teams, handicaps, fps);
 	}
 
 	private MenuUI currentMenuUI() {
@@ -239,6 +280,15 @@ public final class WebMultiplayerCoordinator {
 		// Parallel arrays: tokens[i] ↔ slots[i].
 		@org.teavm.jso.JSProperty("sessionTokens")  JSArray<JSString> getSessionTokens();
 		@org.teavm.jso.JSProperty("slots")          JSArray<JSString> getSlots();
+		// Slot-config parallel arrays — all length-equal, indexed
+		// by the same slot id position.
+		@org.teavm.jso.JSProperty("slotConfigIndexes")   JSArray<JSString> getSlotConfigIndexes();
+		@org.teavm.jso.JSProperty("slotConfigTypes")     JSArray<JSString> getSlotConfigTypes();
+		@org.teavm.jso.JSProperty("slotConfigRaces")     JSArray<JSString> getSlotConfigRaces();
+		@org.teavm.jso.JSProperty("slotConfigColors")    JSArray<JSString> getSlotConfigColors();
+		@org.teavm.jso.JSProperty("slotConfigTeams")     JSArray<JSString> getSlotConfigTeams();
+		@org.teavm.jso.JSProperty("slotConfigHandicaps") JSArray<JSString> getSlotConfigHandicaps();
+		@org.teavm.jso.JSProperty("fixedPlayerSettings") JSString getFixedPlayerSettings();
 
 		default String getMapPathOrEmpty()    { return jsStrOrEmpty(getMapPath()); }
 		default String getHostPeerIdOrEmpty() { return jsStrOrEmpty(getHostPeerId()); }

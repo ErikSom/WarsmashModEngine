@@ -2793,7 +2793,8 @@ public class MenuUI {
 			final int hostUdpPort,
 			final int localPlayerSlot,
 			final IntIntMap serverSlotToMapSlot,
-			final IntIntMap mapSlotToServerSlot) {
+			final IntIntMap mapSlotToServerSlot,
+			final com.etheller.warsmash.networking.MultiplayerLobbyConfig lobbyConfig) {
 		Gdx.app.postRunnable(new Runnable() {
 			@Override
 			public void run() {
@@ -2836,17 +2837,32 @@ public class MenuUI {
 				// this file). Without this, no slot is marked PLAYING and
 				// the engine never spawns starting units even though the
 				// turn-tick loop is running.
+				//
+				// On top of that, apply per-slot race/color/team/closed
+				// from the lobbyConfig (when present) so the in-game
+				// roster matches what the host picked in the lobby UI.
 				final java.util.Set<Integer> humanSlots = new java.util.HashSet<>();
 				for (final com.badlogic.gdx.utils.IntIntMap.Entry e : serverSlotToMapSlot) {
 					if (e.value >= 0) humanSlots.add(e.value);
 				}
 				if (MenuUI.this.currentMapConfig != null) {
 					boolean foundFirstComp = false;
+					final com.etheller.warsmash.networking.MultiplayerLobbyConfig cfg =
+							lobbyConfig != null ? lobbyConfig
+									: com.etheller.warsmash.networking.MultiplayerLobbyConfig.empty();
 					for (int i = 0; i < com.etheller.warsmash.util.WarsmashConstants.MAX_PLAYERS; i++) {
 						final com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.CBasePlayer player =
 								MenuUI.this.currentMapConfig.getPlayer(i);
 						final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl ctrl =
 								player.getController();
+						final boolean isClosed = cfg.getSlotTypes().get(i, com.etheller.warsmash.networking.MultiplayerLobbyConfig.SLOT_TYPE_OPEN)
+								== com.etheller.warsmash.networking.MultiplayerLobbyConfig.SLOT_TYPE_CLOSED;
+						if (isClosed && !humanSlots.contains(i)) {
+							// Host explicitly closed this slot — keep it
+							// out of play. Don't AI-fill, don't activate.
+							player.setSlotState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState.EMPTY);
+							continue;
+						}
 						if (humanSlots.contains(i)) {
 							player.setController(com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl.USER);
 							player.setSlotState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState.PLAYING);
@@ -2859,11 +2875,42 @@ public class MenuUI {
 							player.setAIDifficulty(com.etheller.warsmash.viewer5.handlers.w3x.simulation.ai.AIDifficulty.NORMAL);
 						}
 						else if (ctrl == com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapControl.COMPUTER) {
-							if (!foundFirstComp) {
+							// Mirror single-player skirmish: when the map's
+							// FIXED_PLAYER_SETTINGS_FOR_CUSTOM_FORCES flag is
+							// set (UMS maps), every map-declared Computer slot
+							// is PLAYING. Otherwise (rare in melee) only the
+							// first Computer is activated.
+							if (!foundFirstComp || cfg.isFixedPlayerSettings()) {
 								player.setSlotState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CPlayerSlotState.PLAYING);
 								foundFirstComp = true;
 							}
 						}
+
+						// Apply lobby's race/color/team picks. Slots not
+						// configured by the lobby fall through (sentinel
+						// -1 from IntIntMap.get on missing key).
+						final int wantRace = cfg.getSlotRaces().get(i, -1);
+						if (wantRace >= 0) {
+							final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRacePreference pref;
+							if (wantRace == 0) {
+								pref = com.etheller.warsmash.util.WarsmashConstants.RACE_MANAGER.getRandomRacePreference();
+							}
+							else {
+								final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRace race =
+										com.etheller.warsmash.util.WarsmashConstants.RACE_MANAGER.getRace(wantRace);
+								pref = race != null
+										? com.etheller.warsmash.util.WarsmashConstants.RACE_MANAGER.getRacePreferenceForRace(race)
+										: com.etheller.warsmash.util.WarsmashConstants.RACE_MANAGER.getRandomRacePreference();
+							}
+							if (pref != null) player.setRacePref(pref);
+						}
+						final int wantColor = cfg.getSlotColors().get(i, -1);
+						if (wantColor >= 0) player.setColor(wantColor);
+						final int wantTeam = cfg.getSlotTeams().get(i, -1);
+						if (wantTeam >= 0) player.setTeam(wantTeam);
+						// Handicap intentionally not applied — CBasePlayer
+						// doesn't expose a setter today; engine treats all
+						// slots as 100% until that lands.
 					}
 				}
 
