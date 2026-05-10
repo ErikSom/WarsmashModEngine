@@ -1,7 +1,8 @@
 /**
- * Bottom-right version chip. Click to open the changelog modal.
- * Lazy-loads the modal so the page doesn't pay for it unless the
- * user actually clicks.
+ * Inline clickable version label. Renders "v<VERSION>" as a button
+ * that opens the changelog modal on click. Designed to drop into a
+ * page footer (the landing page uses it) rather than float over a
+ * fullscreen canvas — see CSS .version-chip for the inline styling.
  */
 import { useState } from 'preact/hooks';
 import { VERSION } from '../lib/version';
@@ -11,13 +12,14 @@ export default function VersionChip() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div
+      <button
+        type="button"
         class="version-chip"
         title="View changelog"
         onClick={() => setOpen(true)}
       >
         v{VERSION}
-      </div>
+      </button>
       {open && <ChangelogModal onClose={() => setOpen(false)} />}
     </>
   );

@@ -34,17 +34,6 @@ public class WarsmashConstants {
 	// find it yet so I used this
 	public static final String DEFAULT_STRING = "Default string";
 
-	/**
-	 * User-visible release number of the Warsmash port. Surfaces in the
-	 * web build's bottom-right "v…" chip, in the lobby browser, and in
-	 * the bottom-right of the main menu's WC3-style screen.
-	 *
-	 * Mirror this value with html/web-src/src/lib/version.ts (VERSION)
-	 * and the leading entry in html/CHANGELOG.md whenever you ship a
-	 * user-visible release.
-	 */
-	public static final String WARSMASH_VERSION = "0.2.0";
-
 	public static boolean CATCH_CURSOR = false;
 	public static boolean FULL_SCREEN_MENU_BACKDROP = false;
 	public static final boolean VERBOSE_LOGGING = true;

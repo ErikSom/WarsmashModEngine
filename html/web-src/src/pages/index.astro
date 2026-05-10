@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { VERSION } from '../lib/version';
+import VersionChip from '../components/VersionChip';
 ---
 <Layout title="Warsmash">
   <main class="landing">
@@ -40,7 +40,7 @@ import { VERSION } from '../lib/version';
     </ul>
 
     <footer class="landing-footer">
-      <span>v{VERSION}</span>
+      <VersionChip client:load />
       <span>·</span>
       <a href="https://github.com/Retera/WarsmashModEngine" target="_blank" rel="noopener noreferrer">github</a>
     </footer>

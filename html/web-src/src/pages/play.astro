@@ -3,23 +3,23 @@
  * /play — engine page.
  *
  * Layout strategy:
- *   - Canvas + splash + version chip are server-rendered HTML so the
- *     DOM exists before any JS hydrates. The engine worker takes over
- *     #canvas via transferControlToOffscreen once the user clicks
+ *   - Canvas + splash are server-rendered HTML so the DOM exists
+ *     before any JS hydrates. The engine worker takes over #canvas
+ *     via transferControlToOffscreen once the user clicks
  *     "Play game" inside <EnginePage />.
  *   - <EnginePage /> is the only Preact island that hydrates eagerly
  *     (client:load). It owns the boot state machine and renders the
  *     asset overlay / maps modal / desync modal on top.
- *   - Modals (changelog) hydrate lazily via VersionChip.
+ *   - Version + changelog live on the landing page, not here — when
+ *     the engine canvas takes over, the page is full-bleed and we
+ *     don't want a floating chip clipping into the WC3 menu.
  */
 import Layout from '../layouts/Layout.astro';
 import Splash from '../components/Splash.astro';
 import EnginePage from '../components/EnginePage';
-import VersionChip from '../components/VersionChip';
 ---
 <Layout title="Warsmash" bodyClass="engine-page" blockContextMenu={true}>
   <div id="canvas-wrap"><canvas id="canvas"></canvas></div>
   <Splash />
   <EnginePage client:load />
-  <VersionChip client:load />
 </Layout>
