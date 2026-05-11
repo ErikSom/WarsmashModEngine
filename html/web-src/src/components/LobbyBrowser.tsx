@@ -9,10 +9,12 @@
  * into the lobby room view.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { checkVersionCompat, formatGameVersion } from '../lib/gameVersion';
 import {
   createLobby, joinLobby, listPublicLobbies, getLobbyState,
 } from '../lib/lobbyClient';
 import type { PublicLobbyEntry } from '../lib/poki-bridge';
+import { useGameVersion } from '../lib/useGameVersion';
 
 interface Props {
   playerName: string;
@@ -32,6 +34,11 @@ export default function LobbyBrowser({ playerName, onEnteredLobby, onChangeName 
   const [joinCode, setJoinCode] = useState('');
   const [hosting, setHosting] = useState(false);
   const [bridgeReady, setBridgeReady] = useState(getLobbyState().ready);
+  // Show the local install's version up-front, before the user creates
+  // or joins a lobby — that way they know what they'll bring to the
+  // table (and other players can be told to match it). Same cache as
+  // the in-lobby chip, so the parse only runs once across the session.
+  const { version: gameVersion, build: exactBuild, resolving: buildResolving } = useGameVersion('[lobby-browser]');
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function refresh() {
@@ -131,6 +138,22 @@ export default function LobbyBrowser({ playerName, onEnteredLobby, onChangeName 
         <div class="mp-status-banner">Connecting to signaling server…</div>
       )}
 
+      <div
+        class={`mp-version-chip mp-version-${gameVersion.edition}`}
+        title={gameVersion.evidence.length ? `Matched: ${gameVersion.evidence.join(', ')}` : 'No recognizable WC3 install files staged.'}
+      >
+        Your install: <strong>{formatGameVersion(gameVersion, exactBuild)}</strong>
+        {!exactBuild && buildResolving && gameVersion.edition !== 'unknown' && (
+          <span class="mp-section-hint"> — reading patch MPQ…</span>
+        )}
+        {!exactBuild && !buildResolving && (gameVersion.edition === 'roc' || gameVersion.edition === 'tft') && (
+          <span class="mp-section-hint"> — exact build unknown (no patch MPQ or Warcraft III.exe)</span>
+        )}
+        {gameVersion.edition === 'unknown' && (
+          <span class="mp-section-hint"> — stage your Warcraft III folder on the Assets page.</span>
+        )}
+      </div>
+
       <section class="mp-section">
         <div class="mp-section-header">
           <h2>Host a game</h2>
@@ -176,7 +199,12 @@ export default function LobbyBrowser({ playerName, onEnteredLobby, onChangeName 
           if (!visible.length) return <p class="mp-empty">No public lobbies right now. Be the first — host one!</p>;
           return (
             <ul class="mp-lobbies">
-              {visible.map(entry => (
+              {visible.map(entry => {
+                const compat = describeVersionCompat(entry.customData?.hostVersion, exactBuild?.version ?? null);
+                const full = entry.playerCount >= (entry.maxPlayers || 99);
+                const joinDisabled = full || !compat.joinable;
+                const joinTitle = full ? 'Lobby is full.' : !compat.joinable ? compat.title : '';
+                return (
                 <li class="mp-lobby-card" key={entry.code}>
                   <div class="mp-lobby-main">
                     <div class="mp-lobby-line1">
@@ -187,17 +215,22 @@ export default function LobbyBrowser({ playerName, onEnteredLobby, onChangeName 
                       <code class="mp-lobby-code">{entry.code}</code>
                       <span class="mp-lobby-count">{entry.playerCount} / {entry.maxPlayers || '∞'} players</span>
                       <span class="mp-lobby-age">{ageOf(entry.createdAt)}</span>
+                      <span class={`mp-lobby-version mp-lobby-version-${compat.tone}`} title={compat.title}>
+                        {compat.label}
+                      </span>
                     </div>
                   </div>
                   <button
                     class="primary"
                     onClick={() => onJoinEntry(entry)}
-                    disabled={entry.playerCount >= (entry.maxPlayers || 99)}
+                    disabled={joinDisabled}
+                    title={joinTitle || undefined}
                   >
                     Join
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           );
         })()}
@@ -211,6 +244,68 @@ function shortMap(path: string | undefined): string {
   if (!path) return '';
   // Strip "Maps/" prefix and the .w3x/.w3m suffix for a friendlier label.
   return path.replace(/^Maps\//, '').replace(/\.(w3x|w3m)$/i, '');
+}
+
+interface VersionCompat {
+  label: string;
+  /** UI tone — wired to mp-lobby-version-{ok,bad,unknown} classes. */
+  tone: 'ok' | 'bad' | 'unknown';
+  /** Verbose explanation, shown as the element's title attribute. */
+  title: string;
+  /** Whether the local player can join this lobby. Real WC3 won't
+   *  connect cross-build, so any non-ok verdict blocks Join. */
+  joinable: boolean;
+}
+
+/**
+ * Compare a lobby's published host build against the local install.
+ * Exact-build match is the only compatible state — same as real
+ * Warcraft III, which refuses to connect across patches. Verdicts:
+ *
+ *   ok      — both sides published exact builds and they're identical.
+ *             Joinable.
+ *   bad     — both sides have exact builds and they differ. Not
+ *             joinable.
+ *   unknown — at least one side didn't publish an exact build (no
+ *             war3patch.mpq, no Warcraft III.exe staged, etc.). We
+ *             can't verify compatibility, and silently allowing
+ *             would invite the very desyncs this feature exists to
+ *             prevent — so we block Join here too.
+ */
+function describeVersionCompat(
+  hostVersion: { edition?: string; build?: string | null } | null | undefined,
+  myBuild: string | null,
+): VersionCompat {
+  // Authoritative yes/no comes from checkVersionCompat — same predicate
+  // joinLobby uses to gate the post-join check. This wrapper just adds
+  // the UI-specific label + tone on top of that single decision.
+  const reason = checkVersionCompat(hostVersion, myBuild);
+  const hostBuild = hostVersion?.build ?? null;
+  if (reason === null) {
+    return {
+      label: hostBuild ?? 'version match',
+      tone: 'ok',
+      title: hostBuild ? `Host build ${hostBuild} matches yours.` : 'Versions match.',
+      joinable: true,
+    };
+  }
+  // Distinguish the "we know they're different" red case from the
+  // "we couldn't tell" gray case purely for visual polish — both
+  // block joining identically.
+  if (hostBuild && myBuild && hostBuild !== myBuild) {
+    return {
+      label: `${hostBuild} ≠ ${myBuild}`,
+      tone: 'bad',
+      title: reason,
+      joinable: false,
+    };
+  }
+  return {
+    label: hostBuild ? `host ${hostBuild}` : 'host build unknown',
+    tone: 'unknown',
+    title: reason,
+    joinable: false,
+  };
 }
 
 function ageOf(iso: string): string {

@@ -719,8 +719,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			final GameObject row = modifications.getDoodads().get(doodad.getId());
 			String file = row.readSLKTag("file");//
 			if ("".equals(file)) {
-				final String blaBla = row.readSLKTag("file");
-				System.out.println("bla");
+				file = row.readSLKTag("file");
 			}
 			if (file.toLowerCase().endsWith(".mdl")) {
 				file = file.substring(0, file.length() - 4);

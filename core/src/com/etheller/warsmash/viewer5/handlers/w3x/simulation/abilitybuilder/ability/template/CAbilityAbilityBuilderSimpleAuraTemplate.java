@@ -3,7 +3,7 @@ package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.abi
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,7 +69,7 @@ public class CAbilityAbilityBuilderSimpleAuraTemplate extends AbilityGenericSing
 	@Override
 	public void onAdd(CSimulation game, CUnit unit) {
 		game.getAbilityData().createAbility(getAlias(), game.getHandleIdAllocator().createId());
-		auraGroup = new HashSet<>();
+		auraGroup = new LinkedHashSet<>();
 		localStore.put(ABLocalStoreKeys.AURAGROUP, auraGroup);
 		lastSeenLevel = getLevel();
 		this.abilitiesToAddPerLevel = new HashMap<>();

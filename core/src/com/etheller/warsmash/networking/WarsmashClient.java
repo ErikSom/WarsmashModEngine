@@ -341,7 +341,7 @@ public class WarsmashClient implements ServerToClientListener, GameTurnManager {
 				&& (this.queuedMessages.peek().messageTurnTick == this.latestLocallyRequestedTurn)) {
 			this.queuedMessages.poll().run();
 		}
-		if (!this.queuedMessages.isEmpty()) {
+		if (WarsmashConstants.VERBOSE_LOGGING && !this.queuedMessages.isEmpty()) {
 			System.out.println("stopped with " + this.queuedMessages.peek().messageTurnTick + " != "
 					+ this.latestLocallyRequestedTurn);
 		}
@@ -388,7 +388,9 @@ public class WarsmashClient implements ServerToClientListener, GameTurnManager {
 		// will let the middle layer UDP system know to re-request any lost packets
 		// based
 		// on the heartbeat seq no. But at app layer, here, we can ignore it.
-		System.out.println("got heartbeat() from server");
+		if (WarsmashConstants.VERBOSE_LOGGING) {
+			System.out.println("got heartbeat() from server");
+		}
 	}
 
 	@Override

@@ -538,6 +538,45 @@ a.btn {
   color: var(--error);
   font-size: 13px;
 }
+
+/* "Your install" chip shown above the lobby sections. Rendered by
+ * useGameVersion (LobbyBrowser, AssetUploader) so peers can spot a
+ * version mismatch before they create or join a lobby. Each edition
+ * variant tints the left border to make the answer scannable at a
+ * glance; the body sits on the same elevated surface as .mp-section
+ * so the page reads as one consistent stack. */
+.mp-version-chip {
+  margin-bottom: 24px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+}
+.mp-version-chip strong { color: var(--text); }
+.mp-version-chip .mp-section-hint { display: inline; margin: 0; }
+.mp-version-tft      { border-left-color: var(--accent, #5b8def); }
+.mp-version-roc      { border-left-color: var(--accent, #5b8def); }
+.mp-version-reforged { border-left-color: var(--warning, #d49b3a); }
+.mp-version-unknown  { border-left-color: var(--error,   #c25450); }
+
+/* Per-lobby version badge in the Public lobbies list. Inline pill on
+ * the lobby's line 2 alongside the player count + age. Tones map to
+ * describeVersionCompat()'s ok / warn / bad / unknown verdicts. */
+.mp-lobby-version {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+}
+.mp-lobby-version-ok      { color: var(--ok, #4eb869); border-color: var(--ok, #4eb869); }
+.mp-lobby-version-bad     { color: var(--error, #c25450); border-color: var(--error, #c25450); }
+.mp-lobby-version-unknown { color: var(--text-dim); }
 .mp-warn {
   color: var(--warning);
   font-size: 12px;

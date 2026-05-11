@@ -36,7 +36,7 @@ public class WarsmashConstants {
 
 	public static boolean CATCH_CURSOR = false;
 	public static boolean FULL_SCREEN_MENU_BACKDROP = false;
-	public static final boolean VERBOSE_LOGGING = true;
+	public static final boolean VERBOSE_LOGGING = false;
 	public static final boolean ENABLE_DEBUG = false;
 	public static final char SPECIAL_ESCAPE_KEYCODE = 0x7E;
 

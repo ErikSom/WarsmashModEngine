@@ -163,12 +163,21 @@ export function pokiBridgeCreateLobby (cbCode: (code: string) => void, cbErr: (r
   }).catch((e: unknown) => safe(cbErr)(String((e as any)?.message ?? e)))
 }
 
-// Join an existing lobby by code. Fires cbInfo(code) on success or
-// cbErr(reason) on failure.
-export function pokiBridgeJoinLobby (code: string, cbInfo: (code: string) => void, cbErr: (reason: string) => void, password?: string): void {
+/** Result of a successful join. Includes the host-supplied customData
+ *  so the caller can do compat checks (game version, mods, …) BEFORE
+ *  settling the user into the lobby. Shape matches a subset of
+ *  netlib's `LobbyInfo`. */
+export interface JoinedLobbyInfo {
+  code: string
+  customData?: { [key: string]: any }
+}
+
+// Join an existing lobby by code. Fires cbInfo({code, customData}) on
+// success or cbErr(reason) on failure.
+export function pokiBridgeJoinLobby (code: string, cbInfo: (info: JoinedLobbyInfo) => void, cbErr: (reason: string) => void, password?: string): void {
   if (net == null) { safe(cbErr)('not-initialized'); return }
   net.join(code, password).then(info => {
-    if (info != null) safe(cbInfo)(info.code ?? code)
+    if (info != null) safe(cbInfo)({ code: info.code ?? code, customData: (info as any).customData })
     else              safe(cbErr)('join-not-found-or-full')
   }).catch((e: unknown) => safe(cbErr)(String((e as any)?.message ?? e)))
 }

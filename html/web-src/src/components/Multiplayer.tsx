@@ -10,12 +10,15 @@
  * so the back button works as "leave lobby" without tearing down the
  * WebRTC mesh (the page itself doesn't reload).
  */
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { navigate } from 'astro:transitions/client';
-import { getLobbyState, joinLobby, subscribeLobbyState } from '../lib/lobbyClient';
+import {
+  getLobbyState, joinLobby, subscribeLobbyState, updateLobbyHostVersion,
+} from '../lib/lobbyClient';
 import { getPlayerName } from '../lib/playerName';
 import LobbyBrowser from './LobbyBrowser';
 import LobbyRoom from './LobbyRoom';
+import { useGameVersion } from '../lib/useGameVersion';
 import NameForm from './NameForm';
 
 type View = 'name' | 'browser' | 'room';
@@ -90,6 +93,28 @@ export default function Multiplayer() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  // Run the version detection once at this level so it's the same
+  // cache across views — and so we can republish to the lobby if the
+  // host's build resolves *after* createLobby was already called
+  // (cold-cache fast-click case). The hook itself caches, so this
+  // doesn't re-parse on every render.
+  const { version, build, resolving } = useGameVersion('[multiplayer]');
+  // Avoid spamming setLobbySettings: only publish a particular
+  // (edition, build) once per session. Cleared on lobby leave by the
+  // module's own currentHostVersion = null reset.
+  const lastPublishedRef = useRef<string>('');
+  useEffect(() => {
+    if (resolving) return;                     // wait for resolution
+    if (!getLobbyState().isHost) return;       // only host owns customData
+    const fp = `${version.edition}|${build?.version ?? ''}`;
+    if (fp === lastPublishedRef.current) return;
+    lastPublishedRef.current = fp;
+    updateLobbyHostVersion({
+      edition: version.edition,
+      build: build?.version ?? null,
+    });
+  }, [version, build, resolving]);
 
   function handleNameSaved(clean: string) {
     setName(clean);

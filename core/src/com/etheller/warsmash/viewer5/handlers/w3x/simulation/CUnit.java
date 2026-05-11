@@ -277,6 +277,15 @@ public class CUnit extends CWidget {
 
 	private final List<CUnitBehaviorChangeListener> behaviorChangeListeners = new ArrayList<>();
 
+	// Desync-diagnostic state — updated on every damage() call that lands real damage.
+	// Surfaced via CSimulation.dumpDebugState() so divergent dumps point at the
+	// specific event (which attacker, which tick, how much) instead of just the
+	// resulting life value, which is one or two FP additions removed from the cause.
+	private float lastDamageAmount;
+	private int lastDamageSourceHandle;
+	private int lastDamageTick = -1;
+	private int damageEventCount;
+
 	private transient Set<CRegion> containingRegions = new LinkedHashSet<>();
 	private transient Set<CRegion> priorContainingRegions = new LinkedHashSet<>();
 
@@ -1737,6 +1746,54 @@ public class CUnit extends CWidget {
 		return this.typeId;
 	}
 
+	public float getLastDamageAmount() {
+		return this.lastDamageAmount;
+	}
+
+	public int getLastDamageSourceHandle() {
+		return this.lastDamageSourceHandle;
+	}
+
+	public int getLastDamageTick() {
+		return this.lastDamageTick;
+	}
+
+	public int getDamageEventCount() {
+		return this.damageEventCount;
+	}
+
+	/**
+	 * Appends a compact summary of this unit's non-stacking buff keys for desync
+	 * dumps. Format: {@code TYPE=[key1,key2],TYPE2=[key3]}; empty types omitted.
+	 * Sorted by buff type ordinal and then by key string so the output is byte-
+	 * identical across peers given identical state — comparing dumps is trivial.
+	 */
+	public void appendDebugBuffSummary(final StringBuilder sb) {
+		boolean firstType = true;
+		for (final NonStackingStatBuffType type : NonStackingStatBuffType.values()) {
+			final Map<String, List<NonStackingStatBuff>> byKey = this.nonStackingBuffs.get(type);
+			if ((byKey == null) || byKey.isEmpty()) {
+				continue;
+			}
+			final List<String> keys = new ArrayList<>(byKey.keySet());
+			java.util.Collections.sort(keys);
+			if (!firstType) {
+				sb.append(',');
+			}
+			firstType = false;
+			sb.append(type.name()).append("=[");
+			boolean firstKey = true;
+			for (final String k : keys) {
+				if (!firstKey) {
+					sb.append(',');
+				}
+				firstKey = false;
+				sb.append(k);
+			}
+			sb.append(']');
+		}
+	}
+
 	/**
 	 * @return facing in DEGREES
 	 */
@@ -2924,6 +2981,13 @@ public class CUnit extends CWidget {
 					this.finalDamageTakenModificationListeners)) {
 				trueDamage = listener.onDamage(simulation, source, this, isAttack, isRanged, attackType, damageType,
 						trueDamage);
+			}
+
+			if (trueDamage != 0) {
+				this.lastDamageAmount = trueDamage;
+				this.lastDamageSourceHandle = source != null ? source.getHandleId() : 0;
+				this.lastDamageTick = simulation.getGameTurnTick();
+				this.damageEventCount++;
 			}
 
 			final boolean wasAboveMax = this.life > this.maximumLife;

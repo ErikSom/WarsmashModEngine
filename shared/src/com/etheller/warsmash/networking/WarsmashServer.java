@@ -101,7 +101,9 @@ public class WarsmashServer implements ClientToServerListener {
 	}
 
 	private void startTurn() {
-		System.out.println("sending finishedTurn " + this.currentTurnTick);
+		if (VERBOSE_LOGGING) {
+			System.out.println("sending finishedTurn " + this.currentTurnTick);
+		}
 		WarsmashServer.this.writer.finishedTurn(this.currentTurnTick);
 		WarsmashServer.this.writer.send();
 		this.currentTurnTick++;
@@ -119,7 +121,9 @@ public class WarsmashServer implements ClientToServerListener {
 
 	@Override
 	public void joinGame(final Object sourceAddress, final long sessionToken) {
-		System.out.println("joinGame " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("joinGame " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -136,7 +140,9 @@ public class WarsmashServer implements ClientToServerListener {
 	@Override
 	public void issueTargetOrder(final Object sourceAddress, final long sessionToken, final int unitHandleId,
 			final int abilityHandleId, final int orderId, final int targetHandleId, final boolean queue) {
-		System.out.println("issueTargetOrder from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("issueTargetOrder from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -154,7 +160,9 @@ public class WarsmashServer implements ClientToServerListener {
 	@Override
 	public void issuePointOrder(final Object sourceAddress, final long sessionToken, final int unitHandleId,
 			final int abilityHandleId, final int orderId, final float x, final float y, final boolean queue) {
-		System.out.println("issuePointOrder from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("issuePointOrder from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -173,7 +181,9 @@ public class WarsmashServer implements ClientToServerListener {
 	public void issueDropItemAtPointOrder(final Object sourceAddress, final long sessionToken,
 			final int unitHandleId, final int abilityHandleId, final int orderId, final int targetHandleId,
 			final float x, final float y, final boolean queue) {
-		System.out.println("issueDropItemAtPointOrder from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("issueDropItemAtPointOrder from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -192,7 +202,9 @@ public class WarsmashServer implements ClientToServerListener {
 	public void issueDropItemAtTargetOrder(final Object sourceAddress, final long sessionToken,
 			final int unitHandleId, final int abilityHandleId, final int orderId, final int targetHandleId,
 			final int targetHeroHandleId, final boolean queue) {
-		System.out.println("issueDropItemAtTargetOrder from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("issueDropItemAtTargetOrder from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -210,7 +222,9 @@ public class WarsmashServer implements ClientToServerListener {
 	@Override
 	public void issueImmediateOrder(final Object sourceAddress, final long sessionToken, final int unitHandleId,
 			final int abilityHandleId, final int orderId, final boolean queue) {
-		System.out.println("issueImmediateOrder from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("issueImmediateOrder from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -228,7 +242,9 @@ public class WarsmashServer implements ClientToServerListener {
 	@Override
 	public void unitCancelTrainingItem(final Object sourceAddress, final long sessionToken,
 			final int unitHandleId, final int cancelIndex) {
-		System.out.println("unitCancelTrainingItem from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("unitCancelTrainingItem from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;
@@ -244,7 +260,9 @@ public class WarsmashServer implements ClientToServerListener {
 
 	@Override
 	public void issueGuiPlayerEvent(final Object sourceAddress, final long sessionToken, final int eventId) {
-		System.out.println("issueGuiPlayerEvent from " + sourceAddress);
+		if (VERBOSE_LOGGING) {
+			System.out.println("issueGuiPlayerEvent from " + sourceAddress);
+		}
 		final int playerIndex = getPlayerIndex(sourceAddress, sessionToken);
 		if (playerIndex == -1) {
 			return;

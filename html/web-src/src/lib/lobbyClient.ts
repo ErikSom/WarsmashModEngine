@@ -35,6 +35,33 @@ import {
 import { getMapInfoForFullPath } from './mapInfoCache';
 import { getPlayerName } from './playerName';
 import { DEFAULT_HANDICAP, defaultColorForSlot } from './playerColors';
+import { readIndex } from './assetStaging';
+import {
+  checkVersionCompat, readCachedGameVersion, type GameEdition,
+} from './gameVersion';
+
+/**
+ * Compact host-version descriptor published in lobby customData. We
+ * deliberately keep this minimal — just edition + dotted build string
+ * — to keep the lobby manifest small and to leave the richer
+ * GameVersionInfo on each client where it's already useful (evidence
+ * list, source, etc.). The browser compares `build` strings for an
+ * exact match and `edition` for the coarser RoC/TFT/Reforged check.
+ */
+export interface HostVersionInfo {
+  edition: GameEdition;
+  /** Dotted "major.minor.build.revision" or null when the host's
+   *  install didn't expose an exact build (no patch MPQ + no
+   *  Warcraft III.exe staged). */
+  build: string | null;
+}
+
+/**
+ * Last hostVersion we published. Held at module scope so subsequent
+ * setLobbySettings calls (map change, etc.) re-include it instead of
+ * accidentally dropping it back to undefined. Reset on leaveLobby.
+ */
+let currentHostVersion: HostVersionInfo | null = null;
 
 // Stable UUID — must match WarsmashWebGameId.UUID on the Java side
 // so the JS-driven lobby and the engine's understanding of "which
@@ -684,11 +711,24 @@ export async function createLobby(opts: CreateLobbyOptions = {}): Promise<string
   }
   const maxFromMap = mapInfo?.humanLikeSlots.length ?? extractMapPlayerCount(mapPath);
 
+  // Best-effort include the host's resolved game version in the lobby's
+  // public customData so the browser can show it on each lobby card and
+  // flag version mismatches before someone joins. Reads from the cache
+  // populated by useGameVersion / AssetUploader — synchronous, no IO.
+  // If the cache is cold (user clicks Host before useGameVersion's
+  // parse completes), we publish null here and updateLobbyHostVersion
+  // can patch it in once the parse settles.
+  const cachedVersion = readCachedGameVersion(readIndex());
+  currentHostVersion = cachedVersion ? {
+    edition: cachedVersion.version.edition,
+    build: cachedVersion.build?.version ?? null,
+  } : null;
+
   const settings = {
     public: !opts.password,
     maxPlayers: opts.maxPlayers ?? maxFromMap,
     password: opts.password,
-    customData: { mapPath, hostName: playerName },
+    customData: { mapPath, hostName: playerName, hostVersion: currentHostVersion },
   };
 
   // Build the initial slot table from mapInfo (when available) so the
@@ -726,7 +766,32 @@ export async function joinLobby(code: string, password?: string): Promise<void> 
   return new Promise<void>((resolve, reject) => {
     pokiBridgeJoinLobby(
       code,
-      () => {
+      (info) => {
+        // Strict version gate. The bridge surfaces the host's
+        // customData inline with the join response — by the time we're
+        // in this callback the netlib peer connection IS established,
+        // but the lobby state hasn't been broadcast to the UI yet. If
+        // the build doesn't match, leave immediately and reject so the
+        // caller can surface the reason; the user never sees the
+        // lobby room flash on screen.
+        //
+        // Same rule as describeVersionCompat in LobbyBrowser — applied
+        // here as belt-and-suspenders against:
+        //   - join-by-code (we couldn't pre-flight check there),
+        //   - URL auto-join,
+        //   - a stale lobby list where the host's published version
+        //     differed from what we filtered on a moment ago.
+        const cached = readCachedGameVersion(readIndex());
+        const myBuild = cached?.build?.version ?? null;
+        const reason = checkVersionCompat(info.customData?.hostVersion, myBuild);
+        if (reason !== null) {
+          // Best-effort cleanup; we don't await it because pokiBridge's
+          // leave is fire-and-forget and we want the promise to reject
+          // immediately so the UI can show the error.
+          pokiBridgeLeaveLobby();
+          reject(new Error(reason));
+          return;
+        }
         // leaderId comes from the 'leader' event (fired by netlib
         // right after 'lobby' lands the joined packet). Don't pre-
         // empt it.
@@ -740,6 +805,10 @@ export async function joinLobby(code: string, password?: string): Promise<void> 
 }
 
 export function leaveLobby(): void {
+  // Drop the host-version snapshot — we'll re-read the cache on the
+  // next createLobby. Avoids accidentally republishing a stale value
+  // if the user re-stages between hosting sessions.
+  currentHostVersion = null;
   pokiBridgeLeaveLobby();
 }
 
@@ -817,7 +886,37 @@ export function applyMapChange(plan: MapChangePlan): void {
   pokiBridgeSetLobbySettings(
     {
       maxPlayers: plan.newSlots.length,
-      customData: { mapPath: plan.mapPath, hostName: getPlayerName() || 'Anonymous' },
+      // Re-include hostVersion — setLobbySettings replaces customData
+      // wholesale, so dropping it here would silently strip the version
+      // from the lobby's public listing on the next map change.
+      customData: {
+        mapPath: plan.mapPath,
+        hostName: getPlayerName() || 'Anonymous',
+        hostVersion: currentHostVersion,
+      },
+    },
+    undefined,
+    (reason) => setState({ lastError: 'setLobbySettings: ' + reason }),
+  );
+}
+
+/**
+ * Re-publish the lobby's hostVersion after createLobby. Used when
+ * the local install's exact build resolves async (useGameVersion's
+ * MPQ + PE parse) *after* the lobby was created with a null build.
+ * No-op when called while not hosting — joiners don't own the
+ * customData.
+ */
+export function updateLobbyHostVersion(version: HostVersionInfo): void {
+  if (!state.isHost) return;
+  currentHostVersion = version;
+  pokiBridgeSetLobbySettings(
+    {
+      customData: {
+        mapPath: state.selectedMap,
+        hostName: getPlayerName() || 'Anonymous',
+        hostVersion: currentHostVersion,
+      },
     },
     undefined,
     (reason) => setState({ lastError: 'setLobbySettings: ' + reason }),

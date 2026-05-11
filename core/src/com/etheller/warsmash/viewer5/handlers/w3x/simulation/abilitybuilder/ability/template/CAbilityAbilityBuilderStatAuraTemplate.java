@@ -2,7 +2,7 @@ package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.abi
 
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -242,7 +242,7 @@ public class CAbilityAbilityBuilderStatAuraTemplate extends AbilityGenericSingle
 			this.buff = new ABGenericAuraBuff(game.getHandleIdAllocator().createId(), this.buffId, unit);
 		}
 		game.getAbilityData().createAbility(getAlias(), game.getHandleIdAllocator().createId());
-		auraGroup = new HashSet<>();
+		auraGroup = new LinkedHashSet<>();
 		localStore.put(ABLocalStoreKeys.AURAGROUP, auraGroup);
 		this.fx = game.createPersistentSpellEffectOnUnit(unit, this.getAlias(), CEffectType.TARGET);
 	}

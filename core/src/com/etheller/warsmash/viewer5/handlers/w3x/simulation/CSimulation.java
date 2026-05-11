@@ -328,12 +328,36 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		sb.append("units (").append(sortedUnits.size()).append("):\n");
 		for (final CUnit u : sortedUnits) {
 			sb.append("  handle=").append(u.getHandleId())
+				.append(" type=").append(u.getTypeId().asStringValue())
 				.append(" owner=").append(u.getPlayerIndex())
 				.append(" x=").append(u.getX())
 				.append(" y=").append(u.getY())
 				.append(" life=").append(u.getLife())
 				.append(" mana=").append(u.getMana())
-				.append('\n');
+				.append(" dmgCount=").append(u.getDamageEventCount());
+			// Include the last damage event for units that have taken any damage —
+			// converts "life differs by 1.5" into "peer A took 1 more hit from
+			// unit X on tick Y," which is what we actually need to debug.
+			if (u.getLastDamageTick() >= 0) {
+				sb.append(" lastDmg=").append(u.getLastDamageAmount())
+					.append("@t").append(u.getLastDamageTick())
+					.append(" from=").append(u.getLastDamageSourceHandle());
+				final CUnit src = this.handleIdToUnit.get(u.getLastDamageSourceHandle());
+				if (src != null) {
+					sb.append('(').append(src.getTypeId().asStringValue()).append(')');
+				}
+			}
+			// Buff keys are emitted last so the per-unit line stays readable when
+			// most units have no non-stacking buffs (common case — just appends
+			// nothing). When present, surfaces UUID-style key divergence directly.
+			final int beforeBuffs = sb.length();
+			sb.append(" buffs=");
+			final int afterTag = sb.length();
+			u.appendDebugBuffSummary(sb);
+			if (sb.length() == afterTag) {
+				sb.setLength(beforeBuffs);
+			}
+			sb.append('\n');
 		}
 		return sb.toString();
 	}
