@@ -3,7 +3,7 @@ import { defineConfig } from 'astro/config';
 import preact from '@astrojs/preact';
 
 // Static-only build; the engine is loaded client-side from the same
-// origin. base="./" gives us relative URLs everywhere so the bundle
+// origin. base='.' & assetsPrefix="./" gives us relative URLs everywhere so the bundle
 // can be served from any sub-path (Cloudflare Pages preview deploys,
 // the gradle-copied dist/ inside webapp/, etc.).
 //
@@ -14,14 +14,15 @@ import preact from '@astrojs/preact';
 // the legacy webapp-src/ copy step.
 export default defineConfig({
   output: 'static',
-  base: './',
+  base: '.',
   build: {
     // Don't add hash suffixes to public assets — the engine worker
     // bootstrap and TeaVM @JSBody calls reference fixed filenames
     // (engine-worker.js, poki-bridge.js, etc.). Hashing JS modules
     // produced by Astro itself is still fine; this only affects
     // anything we copy into /public.
-    assets: '_astro'
+    assets: '_astro',
+    assetsPrefix: './'
   },
   integrations: [
     preact({ compat: false })
